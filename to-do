@@ -1,0 +1,51 @@
+Plan to build devices 
+
+- Survey of pellets 
+
+  - What are other researchers using? 
+
+  - What’s commercially available? 
+
+  - Do we want to process/sort/make our own (probably not!) 
+
+  - Peas? 
+
+- Survey of dispensing mechanisms 
+
+  - FED device (done!) 
+
+  - What else exists that is open source 
+
+  - Try printing some mechanisms with minimal editing 
+
+  - What scales easily? (what is tweaked simply) 
+
+- CAD (makes some basic levers/joysticks) 
+
+  - Survey what exists (rat levers) also compile academic references 
+
+  - Get comfortable with CAD doing some really simple levers etc 
+
+  - What software? (uni license?) 
+
+    - Fusion? 
+
+    - Rhino? 
+
+  - Try some basic parametric design (from the start) 
+
+- PCBs 
+
+  - Decide on some software 
+
+  - KiCAD / Eagle / whatever you like 
+
+  - Make something simple (shield?) as soon as possible 
+
+- Design version 0.1 
+
+  - All three of the above 
+
+  - Include visual feedback LED? 
+
+  - Document on Github 
