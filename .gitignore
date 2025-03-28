@@ -1,0 +1,6 @@
+# PLATFORM IO STUFF
+*/.pio
+*/.pio/*
+*/.vscode
+*/.vscode/*
+
