@@ -10,11 +10,10 @@
 #include <SPI.h>
 #include <Stepper.h>
 #include <RTClib.h>
+#include <RTCZero.h>
 #include <SdFat.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SharpMem.h>
-#include <Fonts/FreeSans9pt7b.h>
-#include <Fonts/Org_01.h>
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_AHTX0.h>
 #include <functional>
@@ -38,6 +37,8 @@
 #define MTR_2_PIN       A3
 #define MTR_3_PIN       A4
 #define MTR_4_PIN       A5
+
+#define LP_DISPLAY_REFRESH_RATE 30// seconds
 
 #define MODE_VI 0
 #define MODE_FR 1
@@ -70,6 +71,11 @@ struct Event {
 
 class FED4 {
 private:
+    bool sleepMode = false;
+
+    bool leftPokeStarted = false;
+    bool rightPokeStarted = false;
+
     bool leftPoke = false;
     bool rightPoke = false;
     bool pelletDropped = false;
@@ -131,7 +137,7 @@ public:
     void deleteLines(int n);
 
     void displayLayout();
-    void updateDisplay(bool force = false);
+    void updateDisplay(bool timeOnly = false);
     void drawDateTime();
     void drawBateryCharge();
     void drawStats();
@@ -142,7 +148,7 @@ public:
     void runFrMenu();
     
     void makeNoise(int duration = 300);
-    void print(String str);
+    void print(String str, uint8_t size = 2);
 
     int getBatteryPercentage();
     DateTime getDateTime();
@@ -150,16 +156,19 @@ public:
     bool ignorePokes = false;
     void leftPokeHandler();
     void rightPokeHandler();
+    void alarmHandler();
     void wellHandler();
 
     Adafruit_SharpMem display = Adafruit_SharpMem(SHRP_SCK_PIN, SHRP_MOSI_PIN, SHRP_SS_PIN,  DISPLAY_H, DISPLAY_W);
     Stepper stepper = Stepper(STEPS, MTR_1_PIN, MTR_2_PIN, MTR_3_PIN, MTR_4_PIN); 
     RTC_PCF8523 rtc;
+    RTCZero rtcZero;
 
 private:
     static void leftPokeIRS();
     static void rightPokeIRS();
     static void wellISR();
+    static void alarmISR();
     static void dateTime(uint16_t* date, uint16_t* time);
 };
 

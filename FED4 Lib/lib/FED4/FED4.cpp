@@ -17,10 +17,8 @@ void FED4::begin()
     pinMode(MTR_3_PIN, OUTPUT);
     pinMode(MTR_4_PIN, OUTPUT);
 
-    pinMode(LFT_POKE_PIN, INPUT);
-    pinMode(RGT_POKE_PIN, INPUT);
-    digitalWrite(LFT_POKE_PIN, HIGH);
-    digitalWrite(RGT_POKE_PIN, HIGH);
+    pinMode(LFT_POKE_PIN, INPUT_PULLUP);
+    pinMode(RGT_POKE_PIN, INPUT_PULLUP);
 
     pinMode(WELL_PIN, INPUT);
     digitalWrite(WELL_PIN, HIGH);
@@ -29,11 +27,35 @@ void FED4::begin()
     attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
     attachInterrupt(digitalPinToInterrupt(WELL_PIN), wellISR, FALLING);
 
+    EIC->WAKEUP.reg |= (1<<4); // Enable wakeup on pin 6 (LFT_POKE_PIN)
+    EIC->WAKEUP.reg |= (1<<15); // Enable wakeup on pin 5 (RGT_POKE_PIN)
+    EIC->WAKEUP.reg |= (1<<16); // Enable wakeup on pin RTC peripheral
+
+    SYSCTRL->XOSC32K.reg |= (SYSCTRL_XOSC32K_RUNSTDBY | SYSCTRL_XOSC32K_ONDEMAND);
+    GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(GCM_EIC) |
+                      GCLK_CLKCTRL_CLKEN |
+                      GCLK_CLKCTRL_GEN_GCLK1;
+    while (GCLK->STATUS.bit.SYNCBUSY);
+
+    SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk; // Enable deep sleep mode
+    
     rtc.begin();
     if (rtc.lostPower())
     {
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
     }
+
+    rtcZero.begin();
+    rtcZero.setTime(rtc.now().hour(), rtc.now().minute(), rtc.now().second());
+    rtcZero.setDate(rtc.now().day(), rtc.now().month(), rtc.now().year() - 2000);
+    uint8_t alarmSeconds = rtcZero.getSeconds() + LP_DISPLAY_REFRESH_RATE;
+    if (alarmSeconds >= 59) {
+        alarmSeconds -= 60;
+    }
+    rtcZero.setAlarmTime(0, 0, alarmSeconds);
+    rtcZero.attachInterrupt(alarmISR);
+    rtcZero.enableAlarm(RTCZero::MATCH_SS);
+
     randomSeed(rtc.now().unixtime());
 
     stepper.setSpeed(7);
@@ -58,6 +80,7 @@ void FED4::begin()
     if (mode == MODE_VI) {
         runViMenu();
     }
+
     ignorePokes = true;
 
     initLogFile(); 
@@ -67,10 +90,30 @@ void FED4::begin()
     ignorePokes = false;
 }
 
-
+int timesDisplayUpdated = 0;
+long lastBatteryLog = 0;
 void FED4::run()
 {
     function = "run";   
+
+    long now = rtc.now().unixtime();
+    if (now - lastBatteryLog >= 1200) {
+        lastBatteryLog = now;
+        Event event = {
+            .time = getDateTime(),
+            .event = String("Battery Log")
+        };
+        logEvent(event);
+    }
+
+    if (sleepMode) {
+        updateDisplay(true);
+        timesDisplayUpdated++;
+        String lastUpdate = String("Last update (") + String(timesDisplayUpdated) + "): " + String(rtcZero.getHours()) + ":" + String(rtcZero.getMinutes()) + ":" + String(rtcZero.getSeconds());
+        print(lastUpdate, 1);
+        sleep();
+        return; 
+    }
 
     uint8_t leftRead = digitalRead(LFT_POKE_PIN);
     uint8_t rightRead = digitalRead(RGT_POKE_PIN);
@@ -87,7 +130,7 @@ void FED4::run()
     if (leftRead == LOW && rightRead == LOW && dtLftPoke > 3000 && dtRgtPoke > 3000)
     {
         reset();
-    }
+    } 
     else updateDisplay();
 
     if (mode == MODE_FR)
@@ -172,6 +215,8 @@ void FED4::run()
             }
         }
     }
+
+    sleep();
 }
 
 void FED4::reset()
@@ -218,7 +263,7 @@ void FED4::reset()
 }
 
 void FED4::sleep() {
-    SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk;
+    sleepMode = true;
     __DSB();
     __WFI();
 }
@@ -260,6 +305,8 @@ bool FED4::getWellStatus() {
 
 void FED4::leftPokeHandler()
 {
+    sleepMode = false;
+
     if (ignorePokes)
         return;
 
@@ -269,23 +316,29 @@ void FED4::leftPokeHandler()
         if (millis_now - startLftPoke < 50)
             return;
         startLftPoke = millis_now;
+        leftPokeStarted = true;
     }
     
     else
     {
+        if (!leftPokeStarted)
+            return;
         leftPokeCount++;
         Event event = {
             .time = getDateTime(),
             .event = EVENT_LEFT
         };
         logEvent(event);
-        leftPoke = true;
+        leftPokeStarted = false;
+        rightPoke = true;
         dtLftPoke = 0;
     }
 }
 
 void FED4::rightPokeHandler()
 {
+    sleepMode = false;
+
     if (ignorePokes)
         return;
 
@@ -295,16 +348,20 @@ void FED4::rightPokeHandler()
         if (millis_now - startRgtPoke < 50)
             return;
         startRgtPoke = millis_now;
+        rightPokeStarted = true;
     }
     
     else
     {
+        if (!rightPokeStarted)
+            return;
         rightPokeCount++;
         Event event = {
             .time = getDateTime(),
             .event = EVENT_RIGHT
         };
         logEvent(event);
+        rightPokeStarted = false;
         rightPoke = true;
         dtRgtPoke = 0;
     }
@@ -312,6 +369,20 @@ void FED4::rightPokeHandler()
 
 void FED4::wellHandler() {
     pelletDropped = true;
+}
+
+void FED4::alarmHandler() {
+    if (sleepMode) {
+        updateDisplay(true);
+
+        uint8_t alarmSeconds = rtcZero.getSeconds() + LP_DISPLAY_REFRESH_RATE - 1;
+        uint8_t alarmMinutes = rtcZero.getMinutes() + (alarmSeconds / 60);
+        uint8_t alarmHours = rtcZero.getHours() + (alarmMinutes / 60);
+        alarmSeconds = alarmSeconds % 60;
+        alarmMinutes = alarmMinutes % 60;
+        alarmHours = alarmHours % 24;
+        rtcZero.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
+    }
 }
 
 void FED4::feed(int pellets, bool wait)
@@ -349,6 +420,8 @@ void FED4::feed(int pellets, bool wait)
         logEvent(event);
         delay(200);
     }
+
+    updateDisplay();
 
     // ignorePokes = true;
     // bool leftPoke = false;
@@ -422,8 +495,8 @@ void FED4::feed(int pellets, bool wait)
     //     delay(200);
     // }
 
-    leftPoke = false;
-    rightPoke = false;
+    // leftPoke = false;
+    // rightPoke = false;
 }
 
 void FED4::rotateWheel(int degrees)
@@ -445,9 +518,9 @@ void FED4::makeNoise(int duration)
     }
 }
 
-void FED4::print(String str)
+void FED4::print(String str, uint8_t size)
 {
-    display.setTextSize(2);
+    display.setTextSize(size);
     display.fillRect(2, 106, DISPLAY_W - 4, 16, WHITE);
     display.setTextColor(BLACK);
     display.setCursor(4, 106);
@@ -801,36 +874,30 @@ void FED4::displayLayout()
     updateDisplay(true);
 }
 
-void FED4::updateDisplay(bool force)
+void FED4::updateDisplay(bool statusOnly)
 {
     function = "updateDisplay";
 
-    if (millis() - lastStatsUpdate >= 1000 || force) {
-        detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-        detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+    // if (millis() - lastStatusUpdate < 1000) {
+    //     return;
+    // } 
 
+    detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
+    detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+    
+    if (!statusOnly) {
         drawStats();
-        display.refresh();
-
-        attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-        attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
-
-        lastStatsUpdate = millis();
     }
+    
+    drawDateTime();
+    drawBateryCharge();
 
-    if (millis() - lastStatusUpdate >= 30000 || force) {
-        detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-        detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+    display.refresh();
 
-        drawDateTime();
-        drawBateryCharge();
-        display.refresh();
+    attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
 
-        attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-        attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
-
-        lastStatusUpdate = millis();
-    }
+    lastStatusUpdate = millis();
 }
 
 void FED4::runModeMenu()
@@ -1043,6 +1110,12 @@ void FED4::wellISR()
 {
     if (instance)
         instance->wellHandler();
+}
+
+void FED4::alarmISR()
+{
+    if (instance)
+        instance->alarmHandler();
 }
 
 void FED4::dateTime(uint16_t *date, uint16_t *time)
