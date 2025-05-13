@@ -422,81 +422,6 @@ void FED4::feed(int pellets, bool wait)
     }
 
     updateDisplay();
-
-    // ignorePokes = true;
-    // bool leftPoke = false;
-    // bool rightPoke = false;
-    // for (int i = 1; i < pellets; i++)
-    // {
-    //     function = String("feed ") + i;
-    //     for (int j = 0; j < 45; j++)
-    //     {
-    //         rotateWheel(1);
-    //         if (digitalRead(LEFT_POKE) == LOW) {
-    //             leftPoke = true;
-    //         }
-    //         if (digitalRead(LEFT_POKE) == HIGH && leftPoke) {
-    //             leftPoke = false;
-    //             leftPokeCount++;
-    //             event = {
-    //                 .time = getDateTime(),
-    //                 .event = EVENT_LEFT
-    //             };
-    //             logEvent(event);
-    //         }
-    //         if (digitalRead(RIGHT_POKE) == LOW) {
-    //             rightPoke = true;
-    //         }
-    //         if (digitalRead(RIGHT_POKE) == HIGH && rightPoke) {
-    //             rightPoke = false;
-    //             rightPokeCount++;
-    //             event = {
-    //                 .time = getDateTime(),
-    //                 .event = EVENT_RIGHT
-    //             };
-    //             logEvent(event);
-    //         }
-    //     }
-    //     pelletsDispensed++;
-    //     event = {
-    //         .time = getDateTime(),
-    //         .event = EVENT_PEL
-    //     };
-    //     logEvent(event);
-    //     delay(200);
-    // }
-    // ignorePokes = false;
-
-    // for (int i = 1; i < pellets; i++) {
-    //     while (getWellStatus() == false)
-    //     {
-    //         long deltaT = millis() - startOfFeed;
-    //         if (deltaT < 5000)
-    //         {
-    //             rotateWheel(1);
-    //         }
-    //         else if (deltaT < 15000)
-    //         {
-    //             rotateWheel(-3);
-    //             rotateWheel(5);
-    //         }
-    //         else
-    //         {
-    //             rotateWheel(-10);
-    //             rotateWheel(15);
-    //         }
-    //     }
-    //     pelletsDispensed++;
-    //     Event event = {
-    //         .time = getDateTime(),
-    //         .event = EVENT_PEL
-    //     };
-    //     logEvent(event);
-    //     delay(200);
-    // }
-
-    // leftPoke = false;
-    // rightPoke = false;
 }
 
 void FED4::rotateWheel(int degrees)
@@ -806,7 +731,7 @@ void FED4::drawBateryCharge()
     {
         display.fillRect(136 + 21, 7, 6, 8, BLACK);
     }
-    if (batteryPercentage < 10)
+    if (batteryPercentage <= 10)
     {
         display.setTextSize(2);
         display.fillRect(144, 4, 12, 16, WHITE);
@@ -921,7 +846,9 @@ void FED4::runModeMenu()
     modeMenu->items[4] = initItem((char *)"L Rew", &leftReward, 0, 255, 1);
     modeMenu->items[5] = initItem((char *)"R Rew", &rightReward, 0, 255, 1);
 
-    runMenu(modeMenu);
+    int batteryLevel = getBatteryPercentage();
+
+    runMenu(modeMenu, batteryLevel);
 
     if (modeMenu->items[3]->valueIdx == 0)
     {

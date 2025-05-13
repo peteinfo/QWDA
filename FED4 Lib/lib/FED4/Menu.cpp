@@ -3,7 +3,7 @@
 Adafruit_SharpMem *menu_display;
 RTC_PCF8523 *menu_rtc;
 
-void drawMenu(Menu *menu);
+void drawMenu(Menu *menu, int batteryLevel = -1);
 
 void debPrint(int n) {
   menu_display->clearDisplay();
@@ -371,7 +371,33 @@ void drawClockMenu(Menu *menu) {
   printValue(minute);
 }
 
-void drawMenu(Menu *menu) {
+void drawBattery(int batteryLevel) {
+  menu_display->fillRect(10, 125, 37, 14, WHITE);
+
+  menu_display->drawRect(15, 127, 31, 12, BLACK);
+  menu_display->fillRect(12, 130, 3, 6, BLACK);
+
+  if (batteryLevel > 75) {
+    menu_display->fillRect(17, 129, 6, 8, BLACK);
+  }
+  if (batteryLevel > 50) {
+    menu_display->fillRect(17 + 7, 129, 6, 8, BLACK);
+  }
+  if (batteryLevel > 25) {
+    menu_display->fillRect(17 + 14, 129, 6, 8, BLACK);
+  }
+  if (batteryLevel > 10) {
+    menu_display->fillRect(17 + 21, 129, 6, 8, BLACK);
+  }
+  if (batteryLevel <= 10) {
+    menu_display->setTextSize(2);
+    menu_display->fillRect(25, 126, 12, 16, WHITE);
+    menu_display->setCursor(26, 126);
+    menu_display->print("!");
+  }
+}
+
+void drawMenu(Menu *menu, int batteryLevel) {
   menu_display->clearDisplay();
   menu_display->setTextColor(BLACK);
   menu_display->setTextSize(2);
@@ -385,6 +411,10 @@ void drawMenu(Menu *menu) {
 
   menu_display->drawLine(5, 120, 163, 120, BLACK);
 
+  if (batteryLevel != -1) {
+    drawBattery(batteryLevel);
+  }
+
   if (menu->parent != nullptr) {
     menu_display->setCursor(COL_1_X - 4, 124);
     menu_display->print(" Back");
@@ -395,6 +425,10 @@ void drawMenu(Menu *menu) {
 
   menu_display->refresh();
 }
+
+// void drawMenu(Menu *menu) {
+//   drawMenu(menu, -1);
+// }
 
 void drawListSelection(Menu* menu) {
   int x = COL_2_X - 2;
@@ -526,7 +560,7 @@ InputType getInput(int sameLastInputs) {
 }
 
 long lastInputMillis = 0;
-void runMenu(Menu *menu) {
+void runMenu(Menu *menu, int batteryLevel) {
   if (menu->type == MENU_T_CLOCK) {
     setClock(menu);
   }
@@ -534,7 +568,7 @@ void runMenu(Menu *menu) {
   menu->selectedIdx = 0;
   menu->selectedItem = menu->items[0];
   menu_display->clearDisplay();
-  drawMenu(menu);
+  drawMenu(menu, batteryLevel);
   drawSelection(menu);
   menu_display->refresh();
 

@@ -80,6 +80,6 @@ Menu* initClockMenu(Menu *parent);
 void freeMenu(Menu *menu);
 void handleRightBtn(Menu *item);
 void handleLeftBtn(Menu *item);
-void runMenu(Menu *menu);
+void runMenu(Menu *menu, int batteryLevel = -1);
 
 #endif
