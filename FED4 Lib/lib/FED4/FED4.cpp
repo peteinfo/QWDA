@@ -85,7 +85,6 @@ void FED4::begin()
 
     initLogFile(); 
     displayLayout();
-    delay(2000);
 
     ignorePokes = false;
 }
@@ -109,8 +108,6 @@ void FED4::run()
     if (sleepMode) {
         updateDisplay(true);
         timesDisplayUpdated++;
-        String lastUpdate = String("Last update (") + String(timesDisplayUpdated) + "): " + String(rtcZero.getHours()) + ":" + String(rtcZero.getMinutes()) + ":" + String(rtcZero.getSeconds());
-        print(lastUpdate, 1);
         sleep();
         return; 
     }
@@ -142,8 +139,7 @@ void FED4::run()
             if ( getLeftPoke() ) {
                 feed(leftReward);
             }
-            if ( getRightPoke() ) {
-                
+            if ( getRightPoke() ) { 
                 feed(rightReward);
             }
         }
@@ -330,7 +326,7 @@ void FED4::leftPokeHandler()
         };
         logEvent(event);
         leftPokeStarted = false;
-        rightPoke = true;
+        leftPoke = true;
         dtLftPoke = 0;
     }
 }
@@ -896,7 +892,6 @@ void FED4::runViMenu() {
     float s = spread;
 
     menu->items[0] = initItem((char*)"Avg T", &avg, 0, 120, 5);
-    // print("got here");
     menu->items[1] = initItem((char*)"Spread", &spread, 0.0, 1.0, 0.05);
 
     runMenu(menu);
