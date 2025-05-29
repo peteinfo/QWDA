@@ -7,7 +7,9 @@ FED4::FED4() {
 
 void FED4::begin()
 {
+#if DEBUG
     function = "begin";
+#endif
 
     instance = this;
 
@@ -56,6 +58,7 @@ void FED4::begin()
     rtcZero.attachInterrupt(alarmISR);
     rtcZero.enableAlarm(RTCZero::MATCH_SS);
 
+
     randomSeed(rtc.now().unixtime());
 
     stepper.setSpeed(7);
@@ -89,25 +92,15 @@ void FED4::begin()
     ignorePokes = false;
 }
 
-int timesDisplayUpdated = 0;
+
 long lastBatteryLog = 0;
 void FED4::run()
 {
+#if DEBUG
     function = "run";   
-
-    long now = rtc.now().unixtime();
-    if (now - lastBatteryLog >= 1200) {
-        lastBatteryLog = now;
-        Event event = {
-            .time = getDateTime(),
-            .event = String("Battery Log")
-        };
-        logEvent(event);
-    }
-
+#endif
     if (sleepMode) {
         updateDisplay(true);
-        timesDisplayUpdated++;
         sleep();
         return; 
     }
@@ -184,13 +177,13 @@ void FED4::run()
                 viCountDown = 0;
             }
             else {
-                detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-                detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+                // detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
+                // detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
 
                 viCountDown  = (int)(feedUnixT - rtc.now().unixtime());
                 
-                attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-                attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
+                // attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
+                // attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
             }
         }
         else {
@@ -217,8 +210,12 @@ void FED4::run()
 
 void FED4::reset()
 {
-    ignorePokes = true;
+#if DEBUG
+    function = "reset";
+#endif
 
+    ignorePokes = true;
+    
     makeNoise(300);
     print("Resetting...");
     
@@ -258,13 +255,77 @@ void FED4::reset()
     if (entryPoint) entryPoint();
 }
 
+void FED4::showError(String str) {
+#if DEBUG
+    function = "showError";
+#endif
+
+    char errorMsg[100] = "";
+    snprintf(errorMsg, sizeof(errorMsg), "Error: %s", str.c_str());
+    Event event = {
+        .time = getDateTime(),
+        .event = (const char *)errorMsg
+    };
+    logEvent(event);
+
+    display.clearDisplay();
+    display.setTextSize(2);
+    display.setTextColor(BLACK);
+    display.setCursor(30, 40);
+    display.println("Error:");
+    display.print(str);
+    display.print("!");
+    display.refresh();
+
+    detachInterrupts();
+    __WFI();
+
+    while(true) {
+        delay(1);
+    }
+}
+
+void FED4::attachInterrupts() {
+#if DEBUG
+    function = "attachInterrupts";
+#endif
+
+    attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(WELL_PIN), wellISR, FALLING);
+    rtcZero.attachInterrupt(alarmISR);
+}
+
+void FED4::detachInterrupts() {
+#if DEBUG
+    function = "detachInterrupts";
+#endif
+
+    detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
+    detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+    detachInterrupt(digitalPinToInterrupt(WELL_PIN));
+    rtcZero.detachInterrupt();
+}
+
 void FED4::sleep() {
+#if DEBUG
+    function = "sleep";
+#endif
+
     sleepMode = true;
     __DSB();
     __WFI();
+
+#if DEBUG
+    function = "WFI";
+#endif
 }
 
 int FED4::getViCountDown() {
+#if DEBUG
+    function = "getViCountDown";
+#endif
+
     int offset = (float)viAvg * spread;
     int lowerBound = viAvg - offset;
     int upperBound = viAvg + offset;
@@ -273,6 +334,10 @@ int FED4::getViCountDown() {
 
 bool FED4::getLeftPoke()
 {
+#if DEBUG
+    function = "getLeftPoke";
+#endif
+
     if (leftPoke)
     {
         leftPoke = false;
@@ -283,6 +348,10 @@ bool FED4::getLeftPoke()
 
 bool FED4::getRightPoke()
 {
+#if DEBUG
+    function = "getRightPoke";
+#endif
+
     if (rightPoke)
     {
         rightPoke = false;
@@ -292,6 +361,10 @@ bool FED4::getRightPoke()
 }
 
 bool FED4::getWellStatus() {
+#if DEBUG
+    function = "getWellStatus";
+#endif
+
     if(pelletDropped) {
         pelletDropped = false;
         return true;
@@ -301,6 +374,11 @@ bool FED4::getWellStatus() {
 
 void FED4::leftPokeHandler()
 {
+#if DEBUG
+    interrupedFunction = function;
+    function = "leftPokeHandler";
+#endif
+
     sleepMode = false;
 
     if (ignorePokes)
@@ -333,6 +411,11 @@ void FED4::leftPokeHandler()
 
 void FED4::rightPokeHandler()
 {
+#if DEBUG
+    interrupedFunction = function;
+    function = "rightPokeHandler";
+#endif
+
     sleepMode = false;
 
     if (ignorePokes)
@@ -364,10 +447,25 @@ void FED4::rightPokeHandler()
 }
 
 void FED4::wellHandler() {
+#if DEBUG
+    interrupedFunction = function;
+    function = "wellHandler";
+#endif
+
     pelletDropped = true;
 }
 
 void FED4::alarmHandler() {
+#if DEBUG
+    interrupedFunction = function;
+    function = "alarmHandler";
+    Event event = {
+        .time = getDateTime(),
+        .event = "Alarm Triggered"
+    };
+    logEvent(event);
+#endif
+
     if (sleepMode) {
         updateDisplay(true);
 
@@ -383,7 +481,9 @@ void FED4::alarmHandler() {
 
 void FED4::feed(int pellets, bool wait)
 {
+#if DEBUG
     function = "feed";
+#endif
 
     pelletDropped = false;
 
@@ -393,19 +493,22 @@ void FED4::feed(int pellets, bool wait)
         while (getWellStatus() == false)
         {
             long deltaT = millis() - startOfFeed;
-            if (deltaT < 5000)
+            if (deltaT < 15000)
             {
                 rotateWheel(1);
             }
-            else if (deltaT < 15000)
+            else if (deltaT < 30000)
             {
                 rotateWheel(-3);
                 rotateWheel(5);
             }
-            else
+            else if (deltaT < 90000)
             {
                 rotateWheel(-10);
                 rotateWheel(15);
+            }
+            else {
+                showError("Clogged or No Pellets");
             }
         }
         pelletsDispensed++;
@@ -422,6 +525,10 @@ void FED4::feed(int pellets, bool wait)
 
 void FED4::rotateWheel(int degrees)
 {
+#if DEBUG
+    function = "rotateWheel";
+#endif
+
     digitalWrite(MTR_EN_PIN, HIGH);
 
     int steps = (STEPS * degrees / 360);
@@ -432,6 +539,10 @@ void FED4::rotateWheel(int degrees)
 
 void FED4::makeNoise(int duration)
 {
+#if DEBUG
+    function = "makeNoise";
+#endif
+
     for (int i = 0; i < duration / 50; i++)
     {
         tone(BUZZER_PIN, random(50, 250), 50);
@@ -441,6 +552,10 @@ void FED4::makeNoise(int duration)
 
 void FED4::print(String str, uint8_t size)
 {
+#if DEBUG
+    function = "print";
+#endif
+
     display.setTextSize(size);
     display.fillRect(2, 106, DISPLAY_W - 4, 16, WHITE);
     display.setTextColor(BLACK);
@@ -451,6 +566,10 @@ void FED4::print(String str, uint8_t size)
 
 void FED4::initSD()
 {
+#if DEBUG
+    function = "initSD";
+#endif
+
     digitalWrite(MTR_EN_PIN, LOW);
 
     while (!sd.begin(CARD_SEL_PIN, SD_SCK_MHZ(4)))
@@ -468,6 +587,10 @@ void FED4::initSD()
 
 void FED4::showSdError()
 {
+#if DEBUG
+    function = "showSdError";
+#endif
+
     display.setTextSize(2);
     display.setTextColor(BLACK);
     display.clearDisplay();
@@ -483,7 +606,11 @@ void FED4::showSdError()
 }
 
 void FED4::initLogFile()
-{
+{   
+#if DEBUG
+    function = "initLogFile";
+#endif
+
     digitalWrite(MTR_EN_PIN, LOW);
     char fileName[30] = "";
 
@@ -515,7 +642,13 @@ void FED4::initLogFile()
     }
     
     File logFile = sd.open(fileName, FILE_WRITE);
+
+#if DEBUG
+    logFile.print("TimeStamp,Battery,Device Number,Function,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
+#else
     logFile.print("TimeStamp,Battery,Device Number,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
+#endif
+
     if (mode == MODE_VI)
     logFile.print(",VI Count Down");
     if (mode == MODE_FR)
@@ -529,8 +662,11 @@ void FED4::initLogFile()
 
 void FED4::logEvent(Event e)
 {
-    detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-    detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+#if DEBUG
+    function = "logEvent";
+#endif
+
+    detachInterrupts();
 
     char row[500] = "";
     DateTime now = getDateTime();
@@ -553,6 +689,13 @@ void FED4::logEvent(Event e)
     strcat(row, deviceNumber_str);
     strcat(row, ",");
 
+#if DEBUG
+    char function_name[50];
+    sprintf(function_name, "%s", interrupedFunction.c_str());
+    strcat(row, function_name);
+    strcat(row, ",");
+#endif
+
     char mode_str[10];
     if (mode == MODE_FR)
         sprintf(mode_str, "FR");
@@ -563,7 +706,7 @@ void FED4::logEvent(Event e)
     strcat(row, mode_str);
     strcat(row, ",");
 
-    strcat(row, e.event.c_str());
+    strcat(row, e.event);
     strcat(row, ",");
 
     char activeSensor_str[10];
@@ -627,12 +770,15 @@ void FED4::logEvent(Event e)
     logFile.flush();
     logFile.close();
 
-    attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
+    attachInterrupts();
 }
 
 void FED4::deleteLines(int n)
 {
+#if DEBUG
+    function = "deleteLines";
+#endif
+
     File logFile = sd.open(logFileName, O_RDWR);
     
     int newLineCount = 0;
@@ -667,7 +813,9 @@ void FED4::deleteLines(int n)
 
 void FED4::drawDateTime()
 {
+#if DEBUG
     function = "drawDateTime";
+#endif
 
     DateTime now = getDateTime();
 
@@ -700,7 +848,9 @@ void FED4::drawDateTime()
 
 void FED4::drawBateryCharge()
 {
+#if DEBUG
     function = "drawBateryCharge";
+#endif
 
     // cover up the battery symbol
     display.fillRect(129, 3, 37, 14, WHITE);
@@ -738,8 +888,10 @@ void FED4::drawBateryCharge()
 
 void FED4::drawStats()
 {
+#if DEBUG
     function = "drawStats";
-
+#endif
+    
     display.setTextSize(2);
 
     display.fillRect(98, 24, 100, 80, WHITE);
@@ -763,6 +915,10 @@ void FED4::drawStats()
 
 void FED4::displayLayout()
 {
+#if DEBUG
+    function = "displayLayout";
+#endif
+
     display.clearDisplay();
 
     // draw the top line
@@ -797,14 +953,11 @@ void FED4::displayLayout()
 
 void FED4::updateDisplay(bool statusOnly)
 {
+#if DEBUG
     function = "updateDisplay";
+#endif
 
-    // if (millis() - lastStatusUpdate < 1000) {
-    //     return;
-    // } 
-
-    detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-    detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+    detachInterrupts();
     
     if (!statusOnly) {
         drawStats();
@@ -815,14 +968,17 @@ void FED4::updateDisplay(bool statusOnly)
 
     display.refresh();
 
-    attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
+    attachInterrupts();
 
     lastStatusUpdate = millis();
 }
 
 void FED4::runModeMenu()
 {
+#if DEBUG
+    function = "runModeMenu";
+#endif
+
     ignorePokes = true;
 
     Menu *modeMenu = initMenu(nullptr, 6);
@@ -884,6 +1040,10 @@ void FED4::runModeMenu()
 }
 
 void FED4::runViMenu() {
+#if DEBUG
+    function = "runViMenu";
+#endif
+
     ignorePokes = true;
 
     Menu *menu = initMenu(nullptr, 2);
@@ -904,6 +1064,10 @@ void FED4::runViMenu() {
 }
 
 void FED4::runFrMenu() {
+#if DEBUG
+    function = "runFrMenu";
+#endif
+
     ignorePokes = true;
 
     Menu *menu = initMenu(nullptr, 1);
@@ -918,6 +1082,10 @@ void FED4::runFrMenu() {
 
 int FED4::getBatteryPercentage()
 {
+#if DEBUG
+    function = "getBatteryPercentage";
+#endif
+
     float batteryVoltage = analogRead(VBAT_PIN);
     batteryVoltage *= 2;
     batteryVoltage *= 3.3;
@@ -1013,35 +1181,47 @@ int FED4::getBatteryPercentage()
 }
 
 DateTime FED4::getDateTime() {
+#if DEBUG
+    function = "getDateTime";
+#endif
+
     return rtc.now();
 }
 
 void FED4::leftPokeIRS()
 {
-    if (instance)
+    if (instance) {
         instance->leftPokeHandler();
+    }
 }
 
 void FED4::rightPokeIRS()
 {
-    if (instance)
+    if (instance) {
         instance->rightPokeHandler();
+    }
 }
 
 void FED4::wellISR()
 {
-    if (instance)
+    if (instance) {
         instance->wellHandler();
+    }
 }
 
 void FED4::alarmISR()
 {
-    if (instance)
+    if (instance) {
         instance->alarmHandler();
+    }
 }
 
 void FED4::dateTime(uint16_t *date, uint16_t *time)
 {
+#if DEBUG
+    instance->function = "dateTime";
+#endif
+
     DateTime now = instance->getDateTime();
     *date = FAT_DATE(now.year(), now.month(), now.day());
     *time = FAT_TIME(now.hour(), now.minute(), now.second());

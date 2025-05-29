@@ -38,7 +38,7 @@
 #define MTR_3_PIN       A4
 #define MTR_4_PIN       A5
 
-#define LP_DISPLAY_REFRESH_RATE 30// seconds
+#define LP_DISPLAY_REFRESH_RATE 30 // seconds
 
 #define MODE_VI 0
 #define MODE_FR 1
@@ -63,25 +63,27 @@
 #define EVENT_RESET "Reset Device"
 #define EVENT_NONE  ""
 
+#define DEBUG true
+
 struct Event {
     DateTime time;
-    String event;
+    const char *event;
     ~Event() {};
 };
 
 class FED4 {
 private:
-    bool sleepMode = false;
+    volatile bool sleepMode = false;
 
-    bool leftPokeStarted = false;
-    bool rightPokeStarted = false;
+    volatile bool leftPokeStarted = false;
+    volatile bool rightPokeStarted = false;
 
-    bool leftPoke = false;
-    bool rightPoke = false;
+    volatile bool leftPoke = false;
+    volatile bool rightPoke = false;
     bool pelletDropped = false;
 
-    long startLftPoke = 0;
-    long startRgtPoke = 0;
+    volatile long startLftPoke = 0;
+    volatile long startRgtPoke = 0;
 
     long dtLftPoke = 0;
     long dtRgtPoke = 0;
@@ -94,10 +96,13 @@ public:
     static FED4* instance;
     int deviceNumber = 0;
 
+#ifdef DEBUG
     String function;
+    String interrupedFunction;
+#endif
 
-    int leftPokeCount = 0;
-    int rightPokeCount = 0;
+    volatile int leftPokeCount = 0;
+    volatile int rightPokeCount = 0;
     int pelletsDispensed = 0;
     int leftReward = 1;
     int rightReward = 1;
@@ -117,6 +122,10 @@ public:
     void begin();
     void run();
     void reset();
+    void showError(String str);
+
+    void attachInterrupts();
+    void detachInterrupts();
 
     bool enableSleep = true;
     void sleep();
@@ -141,7 +150,6 @@ public:
     void drawDateTime();
     void drawBateryCharge();
     void drawStats();
-    // void showSdError
 
     void runModeMenu();
     void runViMenu();
