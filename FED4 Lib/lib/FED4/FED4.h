@@ -17,6 +17,7 @@
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_AHTX0.h>
 #include <functional>
+#include <ArduinoJson.h>
 
 #include "Menu.h"
 
@@ -114,7 +115,7 @@ public:
 
     int ratio = 1;
     int viAvg = 30;
-    float spread = 0.75;
+    float viSpread = 0.75;
     int viCountDown = 0;
     uint32_t feedUnixT = 0;
     bool viSet = false;
