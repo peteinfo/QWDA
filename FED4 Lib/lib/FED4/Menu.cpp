@@ -104,6 +104,19 @@ MenuItem* initItem(char *name, const char** list, int listLen) {
   return item;
 }
 
+MenuItem* initItem(char* name, bool* value) {
+  const char* const_name = name;
+
+  MenuItem *item = (MenuItem*)malloc(sizeof(MenuItem));
+  *item = {
+    .name = const_name,
+    .type = ItemType::ITEM_T_BOOL,
+    .value = (void*)value
+  };
+
+  return item;
+}
+
 MenuItem* initItem(char *name, Menu *submenu) {
   const char* cont_name = name;
   MenuItem *item = (MenuItem*)malloc(sizeof(MenuItem));
@@ -163,6 +176,11 @@ void decreaseFloat(MenuItem *item) {
     newValue = *(float*)item->minValue;
   }
   *(float*)item->value = newValue;
+}
+
+void changeBool(MenuItem *item) {
+  bool newValue = !*(bool*)item->value;
+  *(bool*)item->value = newValue;
 }
 
 void nextList(MenuItem *item) {
@@ -229,21 +247,25 @@ void handleRightBtn(Menu *menu) {
       increaseInt(menu->selectedItem);
       break;
 
-    case ItemType::ITEM_T_FLOAT:
-      increaseFloat(menu->selectedItem);
-      break;
+  case ItemType::ITEM_T_FLOAT:
+    increaseFloat(menu->selectedItem);
+    break;
 
-    case ItemType::ITEM_T_LIST:
-      nextList(menu->selectedItem);
-      break;
+  case ItemType::ITEM_T_LIST:
+    nextList(menu->selectedItem);
+    break;
 
-    case ItemType::ITEM_T_SUBMENU:
-      runMenu(menu->selectedItem->submenu);
-      drawMenu(menu);
-      break;
+  case ItemType::ITEM_T_BOOL:
+    changeBool(menu->selectedItem);
+    break;
 
-    default:
-      break;
+  case ItemType::ITEM_T_SUBMENU:
+    runMenu(menu->selectedItem->submenu);
+    drawMenu(menu);
+    break;
+
+  default:
+    break;
   }
 }
 
@@ -255,6 +277,10 @@ void handleLeftBtn(Menu *menu) {
     
     case ItemType::ITEM_T_FLOAT:
       decreaseFloat(menu->selectedItem);
+      break;
+
+    case ItemType::ITEM_T_BOOL:
+      changeBool(menu->selectedItem);
       break;
 
     case ItemType::ITEM_T_LIST:
@@ -273,7 +299,16 @@ void printValue(MenuItem* item) {
     }
     else if (item->type == ITEM_T_FLOAT) {
       float value = *(float*)item->value;
-      menu_display->print(value);
+      menu_display->print(value, 1);
+    }
+    else if (item->type == ITEM_T_BOOL) {
+      bool value = *(bool*)item->value;
+      if (value == true) {
+        menu_display->print("YES");
+      }
+      else {
+        menu_display->print("NO");
+      }
     }
     else if (item->type == ITEM_T_LIST) {
       char *value = (char*)item->value;

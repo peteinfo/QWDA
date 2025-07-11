@@ -40,7 +40,7 @@ void FED4::begin()
     while (GCLK->STATUS.bit.SYNCBUSY);
 
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk; // Enable deep sleep mode
-    
+
     rtc.begin();
     if (rtc.lostPower())
     {
@@ -58,7 +58,6 @@ void FED4::begin()
     rtcZero.attachInterrupt(alarmISR);
     rtcZero.enableAlarm(RTCZero::MATCH_SS);
 
-
     randomSeed(rtc.now().unixtime());
 
     stepper.setSpeed(7);
@@ -67,6 +66,12 @@ void FED4::begin()
     display.clearDisplay();
     display.setRotation(3);
     display.refresh();
+
+    digitalWrite(MTR_EN_PIN, HIGH);
+    delay(2);
+    strip.begin();
+    strip.clear();
+    strip.show();
 
     logFileName.reserve(20);
 
@@ -82,6 +87,12 @@ void FED4::begin()
     }
     if (mode == MODE_VI) {
         runViMenu();
+    }
+    if (mode == MODE_CHANCE) {
+        runChanceMenu();
+    }
+    if (mode == MODE_OTHER) {
+        runOtherModeMenu();
     }
 
     ignorePokes = true;
@@ -99,113 +110,194 @@ void FED4::run()
 #if DEBUG
     function = "run";   
 #endif
-    if (sleepMode) {
-        updateDisplay(true);
+
+    setCue();
+    
+    updateDisplay();    
+    
+    if (checkCondition()) {
+        feed(reward);
+    }
+
+    if (!checkFeedingWindow()) {
         sleep();
-        return; 
+    }
+}
+
+bool FED4::checkFeedingWindow() {
+    if (!feedWindow) return false;
+
+    DateTime now = getDateTime();
+
+    if ( 
+        windowEnd > windowStart
+        && now.hour() >= windowStart
+        && now.hour() < windowEnd
+    ) {
+        return true;
     }
 
-    uint8_t leftRead = digitalRead(LFT_POKE_PIN);
-    uint8_t rightRead = digitalRead(RGT_POKE_PIN);
-
-    if (leftRead == LOW)
-    {
-        dtLftPoke = millis() - startLftPoke;
-    }
-    if (rightRead == LOW)
-    {
-        dtRgtPoke = millis() - startRgtPoke;
+    if (
+        windowEnd < windowStart
+        && ( 
+            now.hour() >= windowStart
+            || now.hour() < windowEnd
+        )
+    ) {
+        return true;
     }
 
-    if (leftRead == LOW && rightRead == LOW && dtLftPoke > 3000 && dtRgtPoke > 3000)
-    {
-        reset();
-    } 
-    else updateDisplay();
+    return false;
+}
 
-    if (mode == MODE_FR)
-    {
-        if (
-            activeSensor == BOTH 
-            && (leftPokeCount + rightPokeCount) % ratio == 0 
-        ) {
-            if ( getLeftPoke() ) {
-                feed(leftReward);
-            }
-            if ( getRightPoke() ) { 
-                feed(rightReward);
-            }
+bool FED4::checkCondition() {
+    if (feedWindow && !checkFeedingWindow()) {
+        return false;
+    }
+
+    if (mode == MODE_FR) {
+        return checkFRCondition();
+    }
+    if (mode == MODE_VI) {
+        return checkVICondition();
+    }
+    if (mode == MODE_CHANCE) {
+        return checkChanceCondition();
+    }
+    if (mode == MODE_OTHER) {
+        return checkChanceCondition();
+    }
+    return false;
+}
+
+bool FED4::checkFRCondition(){
+    if (
+        activeSensor == BOTH
+         && (leftPokeCount + rightPokeCount) % ratio == 0 
+    ) {
+         if ( getLeftPoke() ) {
+            reward = leftReward;
+            return true;
         }
-
-        else if (
-            activeSensor == LEFT
-            && getLeftPoke()
-            && leftPokeCount % ratio == 0
-        ) {
-            feed(leftReward);
+        if ( getRightPoke() ) { 
+            reward = rightReward;
+            return true;
         }
+    }
 
-        else if (
+    else if (
+        activeSensor == LEFT
+        && getLeftPoke()
+        && leftPokeCount % ratio == 0
+    ) {
+        reward = leftReward;
+        return true;
+    }
+
+    else if (
             activeSensor == RIGHT
             && getRightPoke()
             && rightPokeCount % ratio == 0
-        ) {
-            feed(rightReward);
-        }
+    ) {
+        reward = rightReward;
+        return true;
     }
 
-    else if (mode == MODE_VI)
-    {
-        if (viSet) {
+    return false;
+}
+
+bool FED4::checkVICondition() {
+    if (viSet) {
             if (viCountDown <=0) {
-                if (activeSensor == LEFT) {
-                    feed(leftReward);
-                }
-                else if (activeSensor == RIGHT) {
-                    feed(rightReward);
-                }
-                else if (activeSensor == BOTH) {
-                    int rand = random(0, 2);
-                    if (rand == 0) {
-                        feed(leftReward);
-                    }
-                    else {
-                        feed(rightReward);
-                    }
-                }
                 viSet = false;
                 viCountDown = 0;
+                return true;
             }
             else {
-                // detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-                // detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
-
-                viCountDown  = (int)(feedUnixT - rtc.now().unixtime());
-                
-                // attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-                // attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
+                viCountDown  = (int)(feedUnixT - getDateTime().unixtime());
             }
-        }
-        else {
-            if (
-                ( getLeftPoke() && ( activeSensor == LEFT || activeSensor == BOTH ) )
-                || ( getRightPoke() && ( activeSensor == RIGHT || activeSensor == BOTH) )
-            ) {
-                if (viCountDown == 0 && !viSet) {
-                    viCountDown = getViCountDown();
-                    viSet = true;
-                    Event event = {
+    }
+    else {
+        bool pokedLeft = getLeftPoke();
+        bool pokedRight = getRightPoke();
+
+        if (
+            ( pokedLeft && ( activeSensor == LEFT || activeSensor == BOTH ) )
+            || ( pokedRight && ( activeSensor == RIGHT || activeSensor == BOTH) )
+        ) {
+            viCountDown = getViCountDown();
+            viSet = true;
+
+            if (pokedLeft) {
+                reward = leftReward;
+            }
+            else if (pokedRight) {
+                reward = rightReward;
+            }
+
+            Event e = Event {
                         .time = getDateTime(),
                         .event = EVENT_SET_VI
                     };
-                    logEvent(event);
-                    feedUnixT = rtc.now().unixtime() + viCountDown;
-                }
-            }
+                    logEvent(e);
+
+            feedUnixT = getDateTime().unixtime() + viCountDown;
         }
     }
 
-    sleep();
+    return false;
+}
+
+bool FED4::checkChanceCondition() {
+    int r = random(0, 100);
+    if (
+        getLeftPoke()
+        && ( activeSensor == LEFT || activeSensor == BOTH )
+        && r <= int(chance * 100)
+    ) {
+        reward = leftReward;
+        return true;
+    }
+    else if (
+        getRightPoke() 
+        && ( activeSensor == RIGHT || activeSensor == BOTH ) 
+        && r <= int(chance * 100)
+    ) {
+        reward = rightReward;
+        return true;
+    }
+
+    return false;
+}
+
+void FED4::setCue() {
+    detachInterrupts();
+    if (checkFeedingWindow()) {
+        digitalWrite(MTR_EN_PIN, HIGH);
+        delay(2);
+
+        if (activeSensor == BOTH) {
+            strip.setPixelColor(8, 5, 2, 0, 0);
+            strip.setPixelColor(9, 5, 2, 0, 0);
+            strip.setPixelColor(0, 0, 0, 0);
+        }
+        if (activeSensor == LEFT) {
+            strip.setPixelColor(9, 5, 2, 0, 0);
+            strip.setPixelColor(0,0,0,0);
+        }
+        if (activeSensor == RIGHT) {
+            strip.setPixelColor(8, 5, 2, 0, 0);
+        }
+        strip.show();
+    } else {
+        digitalWrite(MTR_EN_PIN, HIGH);
+        delay(2);
+        strip.clear();
+        strip.show();
+        digitalWrite(MTR_EN_PIN, LOW);
+    }
+
+    attachInterrupts();
 }
 
 void FED4::reset()
@@ -289,21 +381,27 @@ void FED4::attachInterrupts() {
 #if DEBUG
     function = "attachInterrupts";
 #endif
-
-    attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
+    noInterrupts();
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(LFT_POKE_PIN));
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(RGT_POKE_PIN));
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(WELL_PIN));
+    // attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
+    // attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
     attachInterrupt(digitalPinToInterrupt(WELL_PIN), wellISR, FALLING);
     rtcZero.attachInterrupt(alarmISR);
+    __DSB();
+
+    interrupts();
 }
 
 void FED4::detachInterrupts() {
 #if DEBUG
     function = "detachInterrupts";
 #endif
-
-    detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-    detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
-    detachInterrupt(digitalPinToInterrupt(WELL_PIN));
+    noInterrupts();
+    // detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
+    // detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
+    // detachInterrupt(digitalPinToInterrupt(WELL_PIN));
     rtcZero.detachInterrupt();
 }
 
@@ -314,7 +412,9 @@ void FED4::sleep() {
 
     sleepMode = true;
     __DSB();
-    __WFI();
+    while(sleepMode) {
+        __WFI();
+    }
 
 #if DEBUG
     function = "WFI";
@@ -467,6 +567,10 @@ void FED4::alarmHandler() {
 #endif
 
     if (sleepMode) {
+        if (checkFeedingWindow()) {
+            sleepMode = false;
+        }
+
         updateDisplay(true);
 
         uint8_t alarmSeconds = rtcZero.getSeconds() + LP_DISPLAY_REFRESH_RATE - 1;
@@ -519,6 +623,9 @@ void FED4::feed(int pellets, bool wait)
         logEvent(event);
         delay(200);
     }
+
+    leftPoke = false;
+    rightPoke = false;
 
     updateDisplay();
 }
@@ -701,6 +808,8 @@ void FED4::logEvent(Event e)
         sprintf(mode_str, "FR");
     else if (mode == MODE_VI)
         sprintf(mode_str, "VI");
+    else if (mode == MODE_CHANCE) 
+        sprintf(mode_str, "CHANCE");
     else if (mode == MODE_OTHER)
         sprintf(mode_str, "OTHER");
     strcat(row, mode_str);
@@ -760,6 +869,12 @@ void FED4::logEvent(Event e)
         char ratio_str[10];
         sprintf(ratio_str, "%d", ratio);
         strcat(row, ratio_str);
+    }
+    if (mode == MODE_CHANCE) {
+        strcat(row, ",");
+        char chance_str[8];
+        sprintf(chance_str, "%.2f", chance);
+        strcat(row, chance_str);
     }
     
     strcat(row, "\n");
@@ -969,8 +1084,6 @@ void FED4::updateDisplay(bool statusOnly)
     display.refresh();
 
     attachInterrupts();
-
-    lastStatusUpdate = millis();
 }
 
 void FED4::runModeMenu()
@@ -981,7 +1094,7 @@ void FED4::runModeMenu()
 
     ignorePokes = true;
 
-    Menu *modeMenu = initMenu(nullptr, 6);
+    Menu *modeMenu = initMenu(nullptr, 9);
 
     Menu *clockMenu = initClockMenu(modeMenu);
     modeMenu->items[0] = initItem((char *)"Time", clockMenu);
@@ -989,14 +1102,18 @@ void FED4::runModeMenu()
     int dev = deviceNumber;
     modeMenu->items[1] = initItem((char *)"Dev no", &dev, 0, 99, 1);
 
-    const char *modes[] = {"FR", "VI"};
-    modeMenu->items[2] = initItem((char *)"Mode", modes, 2);
+    const char *modes[] = {"FR", "VI", "%"};
+    modeMenu->items[2] = initItem((char *)"Mode", modes, 3);
 
     const char *sensors[] = {"L&R", "L", "R"};
     modeMenu->items[3] = initItem((char *)"Sensor", sensors, 3);
 
     modeMenu->items[4] = initItem((char *)"L Rew", &leftReward, 0, 255, 1);
     modeMenu->items[5] = initItem((char *)"R Rew", &rightReward, 0, 255, 1);
+
+    modeMenu->items[6] = initItem((char*)"Rew Win", &feedWindow);
+    modeMenu->items[7] = initItem((char*)"Rew Beg", &windowStart, 0, 23, 1);
+    modeMenu->items[8] = initItem((char*)"Rew End", &windowEnd, 0, 23, 1);
 
     int batteryLevel = getBatteryPercentage();
 
@@ -1015,16 +1132,8 @@ void FED4::runModeMenu()
         activeSensor = RIGHT;
     }
 
-    if (modeMenu->items[2]->valueIdx == 0)
-    {
-        mode = MODE_FR;
-    }
-    else if (modeMenu->items[2]->valueIdx == 1)
-    {
-        mode = MODE_VI;
-    }
-    else
-    {
+    mode = modeMenu->items[2]->valueIdx;
+    if(mode > 2) {
         mode = MODE_OTHER;
     }
 
@@ -1077,6 +1186,19 @@ void FED4::runFrMenu() {
     runMenu(menu);
 
     freeMenu(menu);
+    ignorePokes = false;
+}
+
+void FED4::runChanceMenu() {
+    ignorePokes = true;
+
+    Menu *menu = initMenu(nullptr, 1);
+
+    menu->items[0] = initItem((char*)"Chance", &chance, 0.0, 1.0, 0.1);
+
+    runMenu(menu);
+    freeMenu(menu);
+
     ignorePokes = false;
 }
 
@@ -1184,8 +1306,12 @@ DateTime FED4::getDateTime() {
 #if DEBUG
     function = "getDateTime";
 #endif
+    detachInterrupts();
 
-    return rtc.now();
+    DateTime now = rtc.now();
+
+    attachInterrupts();
+    return now;
 }
 
 void FED4::leftPokeIRS()
@@ -1225,4 +1351,9 @@ void FED4::dateTime(uint16_t *date, uint16_t *time)
     DateTime now = instance->getDateTime();
     *date = FAT_DATE(now.year(), now.month(), now.day());
     *time = FAT_TIME(now.hour(), now.minute(), now.second());
+}
+
+void HardFault_Handler(void) {
+    __asm("BKPT #0");
+    while(1){}
 }

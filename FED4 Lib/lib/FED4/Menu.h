@@ -25,6 +25,7 @@ extern RTC_PCF8523 *menu_rtc;
 typedef enum {
   ITEM_T_INT,
   ITEM_T_FLOAT,
+  ITEM_T_BOOL,
   ITEM_T_LIST,
   ITEM_T_SUBMENU
 } ItemType;
@@ -55,6 +56,7 @@ typedef struct MenuItem {
 } MenuItem;
 MenuItem* initItem(char* name, int* value, int min, int max, int step);
 MenuItem* initItem(char* name, float* value, float min, float max, float step);
+MenuItem* initItem(char* name, bool* value);
 MenuItem* initItem(char *name, const char** list, int listLen);
 MenuItem* initItem(char *name, Menu *submenu);
 void freeMenuItem(MenuItem *item);
@@ -63,6 +65,7 @@ void increaseInt(MenuItem *item);
 void decreaseInt(MenuItem *item);
 void increaseFloat(MenuItem *item);
 void decreaseFloat(MenuItem *item);
+void changeBool(MenuItem *item);
 void nextList(MenuItem *item);
 void previousList(MenuItem *item);
 

@@ -40,8 +40,9 @@
 
 #define LP_DISPLAY_REFRESH_RATE 30 // seconds
 
-#define MODE_VI 0
-#define MODE_FR 1
+#define MODE_FR 0
+#define MODE_VI 1
+#define MODE_CHANCE 2
 #define MODE_OTHER -1
 
 #define LEFT    0
@@ -107,6 +108,9 @@ public:
     int leftReward = 1;
     int rightReward = 1;
     uint8_t activeSensor = BOTH;
+    bool feedWindow = true;
+    int windowStart = 9;
+    int windowEnd = 12;
 
     int ratio = 1;
     int viAvg = 30;
@@ -114,15 +118,28 @@ public:
     int viCountDown = 0;
     uint32_t feedUnixT = 0;
     bool viSet = false;
+    float chance = 0.5;
+
     int getViCountDown();
 
     int8_t mode = MODE_OTHER;
-    
+
+    int reward;
+    bool checkFRCondition();
+    bool checkVICondition();
+    bool checkChanceCondition();
+    std::function<bool()> checkOtherCondition = nullptr;
+
     std::function<void()> entryPoint = nullptr;
     void begin();
     void run();
     void reset();
     void showError(String str);
+
+    bool checkCondition();
+    bool checkFeedingWindow();
+
+    void setCue();
 
     void attachInterrupts();
     void detachInterrupts();
@@ -154,6 +171,8 @@ public:
     void runModeMenu();
     void runViMenu();
     void runFrMenu();
+    void runChanceMenu();
+    std::function<void()> runOtherModeMenu = nullptr;
     
     void makeNoise(int duration = 300);
     void print(String str, uint8_t size = 2);
@@ -171,6 +190,7 @@ public:
     Stepper stepper = Stepper(STEPS, MTR_1_PIN, MTR_2_PIN, MTR_3_PIN, MTR_4_PIN); 
     RTC_PCF8523 rtc;
     RTCZero rtcZero;
+    Adafruit_NeoPixel strip = Adafruit_NeoPixel(10, NEOPXL_PIN, NEO_GRBW + NEO_KHZ800);
 
 private:
     static void leftPokeIRS();
