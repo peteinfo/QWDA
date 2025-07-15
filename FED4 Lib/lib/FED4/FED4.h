@@ -65,8 +65,6 @@
 #define EVENT_RESET "Reset Device"
 #define EVENT_NONE  ""
 
-#define DEBUG true
-
 struct Event {
     DateTime time;
     const char *event;

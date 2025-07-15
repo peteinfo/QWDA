@@ -7,7 +7,7 @@ FED4::FED4() {
 
 void FED4::begin()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "begin";
 #endif
 
@@ -186,7 +186,7 @@ void FED4::begin()
 long lastBatteryLog = 0;
 void FED4::run()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "run";   
 #endif
 
@@ -381,7 +381,7 @@ void FED4::setCue() {
 
 void FED4::reset()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "reset";
 #endif
 
@@ -427,7 +427,7 @@ void FED4::reset()
 }
 
 void FED4::showError(String str) {
-#if DEBUG
+#ifdef DEBUG
     function = "showError";
 #endif
 
@@ -457,7 +457,7 @@ void FED4::showError(String str) {
 }
 
 void FED4::attachInterrupts() {
-#if DEBUG
+#ifdef DEBUG
     function = "attachInterrupts";
 #endif
     noInterrupts();
@@ -474,7 +474,7 @@ void FED4::attachInterrupts() {
 }
 
 void FED4::detachInterrupts() {
-#if DEBUG
+#ifdef DEBUG
     function = "detachInterrupts";
 #endif
     noInterrupts();
@@ -485,7 +485,7 @@ void FED4::detachInterrupts() {
 }
 
 void FED4::sleep() {
-#if DEBUG
+#ifdef DEBUG
     function = "sleep";
 #endif
 
@@ -495,13 +495,13 @@ void FED4::sleep() {
         __WFI();
     }
 
-#if DEBUG
+#ifdef DEBUG
     function = "WFI";
 #endif
 }
 
 int FED4::getViCountDown() {
-#if DEBUG
+#ifdef DEBUG
     function = "getViCountDown";
 #endif
 
@@ -513,7 +513,7 @@ int FED4::getViCountDown() {
 
 bool FED4::getLeftPoke()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "getLeftPoke";
 #endif
 
@@ -527,7 +527,7 @@ bool FED4::getLeftPoke()
 
 bool FED4::getRightPoke()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "getRightPoke";
 #endif
 
@@ -540,7 +540,7 @@ bool FED4::getRightPoke()
 }
 
 bool FED4::getWellStatus() {
-#if DEBUG
+#ifdef DEBUG
     function = "getWellStatus";
 #endif
 
@@ -553,7 +553,7 @@ bool FED4::getWellStatus() {
 
 void FED4::leftPokeHandler()
 {
-#if DEBUG
+#ifdef DEBUG
     interrupedFunction = function;
     function = "leftPokeHandler";
 #endif
@@ -590,7 +590,7 @@ void FED4::leftPokeHandler()
 
 void FED4::rightPokeHandler()
 {
-#if DEBUG
+#ifdef DEBUG
     interrupedFunction = function;
     function = "rightPokeHandler";
 #endif
@@ -626,7 +626,7 @@ void FED4::rightPokeHandler()
 }
 
 void FED4::wellHandler() {
-#if DEBUG
+#ifdef DEBUG
     interrupedFunction = function;
     function = "wellHandler";
 #endif
@@ -635,7 +635,7 @@ void FED4::wellHandler() {
 }
 
 void FED4::alarmHandler() {
-#if DEBUG
+#ifdef DEBUG
     interrupedFunction = function;
     function = "alarmHandler";
     Event event = {
@@ -664,7 +664,7 @@ void FED4::alarmHandler() {
 
 void FED4::feed(int pellets, bool wait)
 {
-#if DEBUG
+#ifdef DEBUG
     function = "feed";
 #endif
 
@@ -711,7 +711,7 @@ void FED4::feed(int pellets, bool wait)
 
 void FED4::rotateWheel(int degrees)
 {
-#if DEBUG
+#ifdef DEBUG
     function = "rotateWheel";
 #endif
 
@@ -725,7 +725,7 @@ void FED4::rotateWheel(int degrees)
 
 void FED4::makeNoise(int duration)
 {
-#if DEBUG
+#ifdef DEBUG
     function = "makeNoise";
 #endif
 
@@ -738,7 +738,7 @@ void FED4::makeNoise(int duration)
 
 void FED4::print(String str, uint8_t size)
 {
-#if DEBUG
+#ifdef DEBUG
     function = "print";
 #endif
 
@@ -752,7 +752,7 @@ void FED4::print(String str, uint8_t size)
 
 void FED4::initSD()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "initSD";
 #endif
 
@@ -773,7 +773,7 @@ void FED4::initSD()
 
 void FED4::showSdError()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "showSdError";
 #endif
 
@@ -793,7 +793,7 @@ void FED4::showSdError()
 
 void FED4::initLogFile()
 {   
-#if DEBUG
+#ifdef DEBUG
     function = "initLogFile";
 #endif
 
@@ -829,7 +829,7 @@ void FED4::initLogFile()
     
     File logFile = sd.open(fileName, FILE_WRITE);
 
-#if DEBUG
+#ifdef DEBUG
     logFile.print("TimeStamp,Battery,Device Number,Function,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
 #else
     logFile.print("TimeStamp,Battery,Device Number,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
@@ -848,7 +848,7 @@ void FED4::initLogFile()
 
 void FED4::logEvent(Event e)
 {
-#if DEBUG
+#ifdef DEBUG
     function = "logEvent";
 #endif
 
@@ -875,7 +875,7 @@ void FED4::logEvent(Event e)
     strcat(row, deviceNumber_str);
     strcat(row, ",");
 
-#if DEBUG
+#ifdef DEBUG
     char function_name[50];
     sprintf(function_name, "%s", interrupedFunction.c_str());
     strcat(row, function_name);
@@ -969,7 +969,7 @@ void FED4::logEvent(Event e)
 
 void FED4::deleteLines(int n)
 {
-#if DEBUG
+#ifdef DEBUG
     function = "deleteLines";
 #endif
 
@@ -1007,7 +1007,7 @@ void FED4::deleteLines(int n)
 
 void FED4::drawDateTime()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "drawDateTime";
 #endif
 
@@ -1042,7 +1042,7 @@ void FED4::drawDateTime()
 
 void FED4::drawBateryCharge()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "drawBateryCharge";
 #endif
 
@@ -1082,7 +1082,7 @@ void FED4::drawBateryCharge()
 
 void FED4::drawStats()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "drawStats";
 #endif
     
@@ -1109,7 +1109,7 @@ void FED4::drawStats()
 
 void FED4::displayLayout()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "displayLayout";
 #endif
 
@@ -1147,7 +1147,7 @@ void FED4::displayLayout()
 
 void FED4::updateDisplay(bool statusOnly)
 {
-#if DEBUG
+#ifdef DEBUG
     function = "updateDisplay";
 #endif
 
@@ -1167,7 +1167,7 @@ void FED4::updateDisplay(bool statusOnly)
 
 void FED4::runModeMenu()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "runModeMenu";
 #endif
 
@@ -1228,7 +1228,7 @@ void FED4::runModeMenu()
 }
 
 void FED4::runViMenu() {
-#if DEBUG
+#ifdef DEBUG
     function = "runViMenu";
 #endif
 
@@ -1252,7 +1252,7 @@ void FED4::runViMenu() {
 }
 
 void FED4::runFrMenu() {
-#if DEBUG
+#ifdef DEBUG
     function = "runFrMenu";
 #endif
 
@@ -1283,7 +1283,7 @@ void FED4::runChanceMenu() {
 
 int FED4::getBatteryPercentage()
 {
-#if DEBUG
+#ifdef DEBUG
     function = "getBatteryPercentage";
 #endif
 
@@ -1382,7 +1382,7 @@ int FED4::getBatteryPercentage()
 }
 
 DateTime FED4::getDateTime() {
-#if DEBUG
+#ifdef DEBUG
     function = "getDateTime";
 #endif
     detachInterrupts();
@@ -1423,7 +1423,7 @@ void FED4::alarmISR()
 
 void FED4::dateTime(uint16_t *date, uint16_t *time)
 {
-#if DEBUG
+#ifdef DEBUG
     instance->function = "dateTime";
 #endif
 
