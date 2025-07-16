@@ -19,6 +19,8 @@
 #include <functional>
 #include <ArduinoJson.h>
 
+#define DEBUG
+
 #include "Menu.h"
 
 #define NEOPXL_PIN      A1

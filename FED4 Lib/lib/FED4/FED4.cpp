@@ -42,6 +42,7 @@ void FED4::begin()
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk; // Enable deep sleep mode
 
     rtc.begin();
+    print(String(rtc.now().minute()));
     if (rtc.lostPower())
     {
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -78,45 +79,45 @@ void FED4::begin()
     SdFile::dateTimeCallback(dateTime);
     initSD();
 
-    if( sd.exists("CONFIG.json") ) {
-        File configFile = sd.open("CONFIG.json", FILE_READ);
-        JsonDocument config;
-        deserializeJson(config, configFile);
+    // if( sd.exists("CONFIG.json") ) {
+    //     File configFile = sd.open("CONFIG.json", FILE_READ);
+    //     JsonDocument config;
+    //     deserializeJson(config, configFile);
         
-        deviceNumber = config["device number"]; 
+    //     deviceNumber = config["device number"]; 
 
-        if (config["mode"]["name"] == "FR") {
-            mode = MODE_FR;
-            ratio = config["mode"]["ratio"];
-        } else if (config["mode"]["name"] == "VI") {
-            mode = MODE_VI;
-            viAvg = config["mode"]["avg"];
-            viSpread = config["mode"]["spread"];
-        } else if (config["mode"]["name"] == "CHANCE") {
-            mode = MODE_CHANCE;
-            chance = config["mode"]["chance"];
-        }
+    //     if (config["mode"]["name"] == "FR") {
+    //         mode = MODE_FR;
+    //         ratio = config["mode"]["ratio"];
+    //     } else if (config["mode"]["name"] == "VI") {
+    //         mode = MODE_VI;
+    //         viAvg = config["mode"]["avg"];
+    //         viSpread = config["mode"]["spread"];
+    //     } else if (config["mode"]["name"] == "CHANCE") {
+    //         mode = MODE_CHANCE;
+    //         chance = config["mode"]["chance"];
+    //     }
 
-        if (config["active sensor"] == "left") {
-            activeSensor = LEFT;
-        } else if (config["active sensor"] == "right") {
-            activeSensor = RIGHT;
-        } else if (config["active sensor"] == "both") {
-            activeSensor = BOTH;
-        }
+    //     if (config["active sensor"] == "left") {
+    //         activeSensor = LEFT;
+    //     } else if (config["active sensor"] == "right") {
+    //         activeSensor = RIGHT;
+    //     } else if (config["active sensor"] == "both") {
+    //         activeSensor = BOTH;
+    //     }
 
-        leftReward = config["reward"]["left"];
-        rightReward = config["reward"]["right"];
-        if (config["reward"]["window"] == true) {
-            feedWindow = true;
-            windowStart = config["reward"]["time"]["start"];
-            windowEnd = config["reward"]["time"]["end"];
-        } else {
-            feedWindow = false;
-        }
+    //     leftReward = config["reward"]["left"];
+    //     rightReward = config["reward"]["right"];
+    //     if (config["reward"]["window"] == true) {
+    //         feedWindow = true;
+    //         windowStart = config["reward"]["time"]["start"];
+    //         windowEnd = config["reward"]["time"]["end"];
+    //     } else {
+    //         feedWindow = false;
+    //     }
 
-        configFile.close();
-    }
+    //     configFile.close();
+    // }
 
     menu_display = &display;
     menu_rtc = &rtc;
@@ -135,44 +136,44 @@ void FED4::begin()
         runOtherModeMenu();
     }
 
-    sd.remove("CONFIG.json");
-    File configFile = sd.open("CONFIG.json", FILE_WRITE);
-    JsonDocument configJson;
+    // sd.remove("CONFIG.json");
+    // File configFile = sd.open("CONFIG.json", FILE_WRITE);
+    // JsonDocument configJson;
 
-    configJson["device number"] = deviceNumber;
+    // configJson["device number"] = deviceNumber;
 
-    if (mode == MODE_FR) {
-        configJson["mode"]["name"] = "FR";
-        configJson["mode"]["ratio"] = ratio;
-    } else if (mode == MODE_VI) {
-        configJson["mode"]["name"] = "VI";
-        configJson["mode"]["avg"] = viAvg;
-        configJson["mode"]["spread"] = viSpread;
-    } else if (mode == MODE_CHANCE) {
-        configJson["mode"]["name"] = "CHANCE";
-        configJson["mode"]["chance"] = chance;
-    }
+    // if (mode == MODE_FR) {
+    //     configJson["mode"]["name"] = "FR";
+    //     configJson["mode"]["ratio"] = ratio;
+    // } else if (mode == MODE_VI) {
+    //     configJson["mode"]["name"] = "VI";
+    //     configJson["mode"]["avg"] = viAvg;
+    //     configJson["mode"]["spread"] = viSpread;
+    // } else if (mode == MODE_CHANCE) {
+    //     configJson["mode"]["name"] = "CHANCE";
+    //     configJson["mode"]["chance"] = chance;
+    // }
 
-    if (activeSensor == LEFT) {
-        configJson["active sensor"] = "left";
-    } else if (activeSensor == RIGHT) {
-        configJson["active sensor"] = "right";
-    } else if (activeSensor == BOTH) {
-        configJson["active sensor"] = "both";
-    }
+    // if (activeSensor == LEFT) {
+    //     configJson["active sensor"] = "left";
+    // } else if (activeSensor == RIGHT) {
+    //     configJson["active sensor"] = "right";
+    // } else if (activeSensor == BOTH) {
+    //     configJson["active sensor"] = "both";
+    // }
 
-    configJson["reward"]["left"] = leftReward;
-    configJson["reward"]["right"] = rightReward;
-    if (feedWindow) {
-        configJson["reward"]["window"] = true;
-        configJson["reward"]["time"]["start"] = windowStart;
-        configJson["reward"]["time"]["end"] = windowEnd;
-    } else {
-        configJson["reward"]["window"] = false;
-    }
+    // configJson["reward"]["left"] = leftReward;
+    // configJson["reward"]["right"] = rightReward;
+    // if (feedWindow) {
+    //     configJson["reward"]["window"] = true;
+    //     configJson["reward"]["time"]["start"] = windowStart;
+    //     configJson["reward"]["time"]["end"] = windowEnd;
+    // } else {
+    //     configJson["reward"]["window"] = false;
+    // }
     
-    serializeJson(configJson, configFile);
-    configFile.close();
+    // serializeJson(configJson, configFile);
+    // configFile.close();
 
     ignorePokes = true;
 

@@ -218,7 +218,7 @@ Menu* initClockMenu(Menu *parent) {
 
   MenuItem *day_itm = initItem((char*)"day", day, 1, 31, 1);
   MenuItem *month_itm = initItem((char*)"month", month, 1, 12, 1);
-  MenuItem *year_itm = initItem((char*)"year", year, 0, 99, 1);
+  MenuItem *year_itm = initItem((char*)"year", year, 2000, 2099, 1);
   MenuItem *hour_itm = initItem((char*)"hour", hour, 0, 23, 1);
   MenuItem *minute_itm = initItem((char*)"minute", minute, 0, 59, 1);
 
@@ -363,6 +363,12 @@ void setClock(Menu *menu) {
   MenuItem *hour = menu->items[3];
   MenuItem *minute = menu->items[4];
 
+  int deb_day = menu_rtc->now().day();
+  int deb_month = menu_rtc->now().month();
+  int deb_year = menu_rtc->now().year();
+  int deb_hour = menu_rtc->now().hour();
+  int deb_minute = menu_rtc->now().minute();
+
   *(int*)day->value = menu_rtc->now().day();
   *(int*)month->value = menu_rtc->now().month();
   *(int*)year->value = menu_rtc->now().year();
@@ -505,6 +511,7 @@ void drawClockSelection(Menu* menu) {
   else if (menu->selectedIdx == 2) {
     menu_display->fillRect(103, 35, 50, 22, BLACK);
     menu_display->setCursor(105, 40);
+    menu_display->print("20");
     printValue(selection);
   }
   else if (menu->selectedIdx == 3) {
@@ -667,7 +674,7 @@ void runMenu(Menu *menu, int batteryLevel) {
   
   if (menu->type == MENU_T_CLOCK) {
     DateTime now = DateTime(
-      *(int*)menu->items[2]->value,
+      *(int*)menu->items[2]->value - 2000,
       *(int*)menu->items[1]->value,
       *(int*)menu->items[0]->value,
       *(int*)menu->items[3]->value,
