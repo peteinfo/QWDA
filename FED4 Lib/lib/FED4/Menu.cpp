@@ -129,17 +129,26 @@ MenuItem* initItem(char *name, Menu *submenu) {
   return item;
 }
 
-void freeMenuItem(MenuItem *item) {
-  // free(item->value);
-  free(item->minValue);
-  free(item->maxValue);
-  free(item->step);
-  free(item->list);
-  if (item->type == ItemType::ITEM_T_SUBMENU) {
-    freeMenu(item->submenu);
+MenuItem::~MenuItem() {
+  free(minValue);
+  free(maxValue);
+  free(step);
+  free(list);
+  if (type == ItemType::ITEM_T_SUBMENU) {
+    delete submenu;
   }
-  free(item);
 }
+// void freeMenuItem(MenuItem *item) {
+//   free(item->value);
+//   free(item->minValue);
+//   free(item->maxValue);
+//   free(item->step);
+//   free(item->list);
+//   if (item->type == ItemType::ITEM_T_SUBMENU) {
+//     freeMenu(item->submenu);
+//   }
+//   free(item);
+// }
 
 const char** initList(int listLen) {
   const char** list = (const char**)malloc(listLen * sizeof(void*));
@@ -190,9 +199,13 @@ void nextList(MenuItem *item) {
 }
 
 void previousList(MenuItem *item) {
-  int newIdx = (item->valueIdx + 1) % item->listLen;
+  int newIdx = (item->valueIdx - 1) % item->listLen;
   item->value = (void*)item->list[newIdx];
   item->valueIdx = newIdx;
+}
+
+Menu* initMenu(int itemNo) {
+  return initMenu(nullptr, itemNo);
 }
 
 Menu* initMenu(Menu *parent, int itemNo) {
@@ -233,13 +246,18 @@ Menu* initClockMenu(Menu *parent) {
   return clockMenu;
 }
 
-void freeMenu(Menu *menu) {
-  free(menu->parent);
-  for (int i = 0; i < menu->itemNo; i++) {
-    freeMenuItem(menu->items[i]);
+Menu::~Menu(){
+  for (int i = 0; i < itemNo; i++) {
+    delete(items[i]);
   }
-  free(menu);
 }
+// void freeMenu(Menu *menu) {
+//   free(menu->parent);
+//   for (int i = 0; i < menu->itemNo; i++) {
+//     freeMenuItem(menu->items[i]);
+//   }
+//   free(menu);
+// }
 
 void handleRightBtn(Menu *menu) {
   switch (menu->selectedItem->type) {
@@ -362,12 +380,6 @@ void setClock(Menu *menu) {
   MenuItem *year = menu->items[2];
   MenuItem *hour = menu->items[3];
   MenuItem *minute = menu->items[4];
-
-  int deb_day = menu_rtc->now().day();
-  int deb_month = menu_rtc->now().month();
-  int deb_year = menu_rtc->now().year();
-  int deb_hour = menu_rtc->now().hour();
-  int deb_minute = menu_rtc->now().minute();
 
   *(int*)day->value = menu_rtc->now().day();
   *(int*)month->value = menu_rtc->now().month();
@@ -511,7 +523,6 @@ void drawClockSelection(Menu* menu) {
   else if (menu->selectedIdx == 2) {
     menu_display->fillRect(103, 35, 50, 22, BLACK);
     menu_display->setCursor(105, 40);
-    menu_display->print("20");
     printValue(selection);
   }
   else if (menu->selectedIdx == 3) {

@@ -137,6 +137,9 @@ public:
     void reset();
     void showError(String str);
 
+    void loadConfig();
+    void saveConfig();
+
     bool checkCondition();
     bool checkFeedingWindow();
 

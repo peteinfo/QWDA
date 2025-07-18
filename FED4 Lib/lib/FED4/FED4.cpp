@@ -7,7 +7,7 @@ FED4::FED4() {
 
 void FED4::begin()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "begin";
 #endif
 
@@ -42,7 +42,6 @@ void FED4::begin()
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk; // Enable deep sleep mode
 
     rtc.begin();
-    print(String(rtc.now().minute()));
     if (rtc.lostPower())
     {
         rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -75,54 +74,15 @@ void FED4::begin()
     strip.show();
 
     logFileName.reserve(20);
-
+    
     SdFile::dateTimeCallback(dateTime);
     initSD();
-
-    // if( sd.exists("CONFIG.json") ) {
-    //     File configFile = sd.open("CONFIG.json", FILE_READ);
-    //     JsonDocument config;
-    //     deserializeJson(config, configFile);
-        
-    //     deviceNumber = config["device number"]; 
-
-    //     if (config["mode"]["name"] == "FR") {
-    //         mode = MODE_FR;
-    //         ratio = config["mode"]["ratio"];
-    //     } else if (config["mode"]["name"] == "VI") {
-    //         mode = MODE_VI;
-    //         viAvg = config["mode"]["avg"];
-    //         viSpread = config["mode"]["spread"];
-    //     } else if (config["mode"]["name"] == "CHANCE") {
-    //         mode = MODE_CHANCE;
-    //         chance = config["mode"]["chance"];
-    //     }
-
-    //     if (config["active sensor"] == "left") {
-    //         activeSensor = LEFT;
-    //     } else if (config["active sensor"] == "right") {
-    //         activeSensor = RIGHT;
-    //     } else if (config["active sensor"] == "both") {
-    //         activeSensor = BOTH;
-    //     }
-
-    //     leftReward = config["reward"]["left"];
-    //     rightReward = config["reward"]["right"];
-    //     if (config["reward"]["window"] == true) {
-    //         feedWindow = true;
-    //         windowStart = config["reward"]["time"]["start"];
-    //         windowEnd = config["reward"]["time"]["end"];
-    //     } else {
-    //         feedWindow = false;
-    //     }
-
-    //     configFile.close();
-    // }
-
+    
+    loadConfig();
+    
     menu_display = &display;
     menu_rtc = &rtc;
     runModeMenu();
-
     if (mode == MODE_FR) {
         runFrMenu();
     }
@@ -136,44 +96,7 @@ void FED4::begin()
         runOtherModeMenu();
     }
 
-    // sd.remove("CONFIG.json");
-    // File configFile = sd.open("CONFIG.json", FILE_WRITE);
-    // JsonDocument configJson;
-
-    // configJson["device number"] = deviceNumber;
-
-    // if (mode == MODE_FR) {
-    //     configJson["mode"]["name"] = "FR";
-    //     configJson["mode"]["ratio"] = ratio;
-    // } else if (mode == MODE_VI) {
-    //     configJson["mode"]["name"] = "VI";
-    //     configJson["mode"]["avg"] = viAvg;
-    //     configJson["mode"]["spread"] = viSpread;
-    // } else if (mode == MODE_CHANCE) {
-    //     configJson["mode"]["name"] = "CHANCE";
-    //     configJson["mode"]["chance"] = chance;
-    // }
-
-    // if (activeSensor == LEFT) {
-    //     configJson["active sensor"] = "left";
-    // } else if (activeSensor == RIGHT) {
-    //     configJson["active sensor"] = "right";
-    // } else if (activeSensor == BOTH) {
-    //     configJson["active sensor"] = "both";
-    // }
-
-    // configJson["reward"]["left"] = leftReward;
-    // configJson["reward"]["right"] = rightReward;
-    // if (feedWindow) {
-    //     configJson["reward"]["window"] = true;
-    //     configJson["reward"]["time"]["start"] = windowStart;
-    //     configJson["reward"]["time"]["end"] = windowEnd;
-    // } else {
-    //     configJson["reward"]["window"] = false;
-    // }
-    
-    // serializeJson(configJson, configFile);
-    // configFile.close();
+    saveConfig();
 
     ignorePokes = true;
 
@@ -187,7 +110,7 @@ void FED4::begin()
 long lastBatteryLog = 0;
 void FED4::run()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "run";   
 #endif
 
@@ -382,7 +305,7 @@ void FED4::setCue() {
 
 void FED4::reset()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "reset";
 #endif
 
@@ -428,7 +351,7 @@ void FED4::reset()
 }
 
 void FED4::showError(String str) {
-#ifdef DEBUG
+#ifdef DEB
     function = "showError";
 #endif
 
@@ -457,8 +380,91 @@ void FED4::showError(String str) {
     }
 }
 
+void FED4::loadConfig() {
+    if (!sd.exists("CONFIG.json")) return;
+
+    File configFile = sd.open("CONFIG.json", FILE_READ);
+    JsonDocument config;
+    deserializeJson(config, configFile);
+    
+    deviceNumber = config["device number"]; 
+
+    if (config["mode"]["name"] == "FR") {
+        mode = MODE_FR;
+        ratio = config["mode"]["ratio"];
+    } else if (config["mode"]["name"] == "VI") {
+        mode = MODE_VI;
+        viAvg = config["mode"]["avg"];
+        viSpread = config["mode"]["spread"];
+    } else if (config["mode"]["name"] == "CHANCE") {
+        mode = MODE_CHANCE;
+        chance = config["mode"]["chance"];
+    }
+
+    if (config["active sensor"] == "left") {
+        activeSensor = LEFT;
+    } else if (config["active sensor"] == "right") {
+        activeSensor = RIGHT;
+    } else if (config["active sensor"] == "both") {
+        activeSensor = BOTH;
+    }
+
+    leftReward = config["reward"]["left"];
+    rightReward = config["reward"]["right"];
+    if (config["reward"]["window"] == true) {
+        feedWindow = true;
+        windowStart = config["reward"]["time"]["start"];
+        windowEnd = config["reward"]["time"]["end"];
+    } else {
+        feedWindow = false;
+    }
+
+    configFile.close();
+}
+
+void FED4::saveConfig() {
+    sd.remove("CONFIG.json");
+    File configFile = sd.open("CONFIG.json", FILE_WRITE);
+    JsonDocument config;
+
+    config["device number"] = 0;
+
+    if (mode == MODE_FR) {
+        config["mode"]["name"] = "FR";
+        config["mode"]["ratio"] = ratio;
+    } else if (mode == MODE_VI) {
+        config["mode"]["name"] = "VI";
+        config["mode"]["avg"] = viAvg;
+        config["mode"]["spread"] = viSpread;
+    } else if (mode == MODE_CHANCE) {
+        config["mode"]["name"] = "CHANCE";
+        config["mode"]["chance"] = chance;
+    }
+
+    if (activeSensor == LEFT) {
+        config["active sensor"] = "left";
+    } else if (activeSensor == RIGHT) {
+        config["active sensor"] = "right";
+    } else if (activeSensor == BOTH) {
+        config["active sensor"] = "both";
+    }
+
+    config["reward"]["left"] = leftReward;
+    config["reward"]["right"] = rightReward;
+    if (feedWindow) {
+        config["reward"]["window"] = true;
+        config["reward"]["time"]["start"] = windowStart;
+        config["reward"]["time"]["end"] = windowEnd;
+    } else {
+        config["reward"]["window"] = false;
+    }
+    
+    serializeJson(config, configFile);
+    configFile.close();
+}
+
 void FED4::attachInterrupts() {
-#ifdef DEBUG
+#ifdef DEB
     function = "attachInterrupts";
 #endif
     noInterrupts();
@@ -475,7 +481,7 @@ void FED4::attachInterrupts() {
 }
 
 void FED4::detachInterrupts() {
-#ifdef DEBUG
+#ifdef DEB
     function = "detachInterrupts";
 #endif
     noInterrupts();
@@ -486,7 +492,7 @@ void FED4::detachInterrupts() {
 }
 
 void FED4::sleep() {
-#ifdef DEBUG
+#ifdef DEB
     function = "sleep";
 #endif
 
@@ -496,13 +502,13 @@ void FED4::sleep() {
         __WFI();
     }
 
-#ifdef DEBUG
+#ifdef DEB
     function = "WFI";
 #endif
 }
 
 int FED4::getViCountDown() {
-#ifdef DEBUG
+#ifdef DEB
     function = "getViCountDown";
 #endif
 
@@ -514,7 +520,7 @@ int FED4::getViCountDown() {
 
 bool FED4::getLeftPoke()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "getLeftPoke";
 #endif
 
@@ -528,7 +534,7 @@ bool FED4::getLeftPoke()
 
 bool FED4::getRightPoke()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "getRightPoke";
 #endif
 
@@ -541,7 +547,7 @@ bool FED4::getRightPoke()
 }
 
 bool FED4::getWellStatus() {
-#ifdef DEBUG
+#ifdef DEB
     function = "getWellStatus";
 #endif
 
@@ -554,7 +560,7 @@ bool FED4::getWellStatus() {
 
 void FED4::leftPokeHandler()
 {
-#ifdef DEBUG
+#ifdef DEB
     interrupedFunction = function;
     function = "leftPokeHandler";
 #endif
@@ -591,7 +597,7 @@ void FED4::leftPokeHandler()
 
 void FED4::rightPokeHandler()
 {
-#ifdef DEBUG
+#ifdef DEB
     interrupedFunction = function;
     function = "rightPokeHandler";
 #endif
@@ -627,7 +633,7 @@ void FED4::rightPokeHandler()
 }
 
 void FED4::wellHandler() {
-#ifdef DEBUG
+#ifdef DEB
     interrupedFunction = function;
     function = "wellHandler";
 #endif
@@ -636,7 +642,7 @@ void FED4::wellHandler() {
 }
 
 void FED4::alarmHandler() {
-#ifdef DEBUG
+#ifdef DEB
     interrupedFunction = function;
     function = "alarmHandler";
     Event event = {
@@ -665,7 +671,7 @@ void FED4::alarmHandler() {
 
 void FED4::feed(int pellets, bool wait)
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "feed";
 #endif
 
@@ -712,7 +718,7 @@ void FED4::feed(int pellets, bool wait)
 
 void FED4::rotateWheel(int degrees)
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "rotateWheel";
 #endif
 
@@ -726,7 +732,7 @@ void FED4::rotateWheel(int degrees)
 
 void FED4::makeNoise(int duration)
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "makeNoise";
 #endif
 
@@ -739,7 +745,7 @@ void FED4::makeNoise(int duration)
 
 void FED4::print(String str, uint8_t size)
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "print";
 #endif
 
@@ -753,7 +759,7 @@ void FED4::print(String str, uint8_t size)
 
 void FED4::initSD()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "initSD";
 #endif
 
@@ -763,18 +769,11 @@ void FED4::initSD()
     {
         showSdError();
     }
-
-    File deviceNumberFile = sd.open("DEVICE_NUMBER", FILE_WRITE);
-    deviceNumberFile = sd.open("DEVICE_NUMBER", FILE_READ);
-    deviceNumber = deviceNumberFile.parseInt();
-    deviceNumberFile.rewind();
-    deviceNumberFile.flush();
-    deviceNumberFile.close();
 }
 
 void FED4::showSdError()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "showSdError";
 #endif
 
@@ -794,7 +793,7 @@ void FED4::showSdError()
 
 void FED4::initLogFile()
 {   
-#ifdef DEBUG
+#ifdef DEB
     function = "initLogFile";
 #endif
 
@@ -830,7 +829,7 @@ void FED4::initLogFile()
     
     File logFile = sd.open(fileName, FILE_WRITE);
 
-#ifdef DEBUG
+#ifdef DEB
     logFile.print("TimeStamp,Battery,Device Number,Function,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
 #else
     logFile.print("TimeStamp,Battery,Device Number,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
@@ -849,7 +848,7 @@ void FED4::initLogFile()
 
 void FED4::logEvent(Event e)
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "logEvent";
 #endif
 
@@ -876,7 +875,7 @@ void FED4::logEvent(Event e)
     strcat(row, deviceNumber_str);
     strcat(row, ",");
 
-#ifdef DEBUG
+#ifdef DEB
     char function_name[50];
     sprintf(function_name, "%s", interrupedFunction.c_str());
     strcat(row, function_name);
@@ -970,7 +969,7 @@ void FED4::logEvent(Event e)
 
 void FED4::deleteLines(int n)
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "deleteLines";
 #endif
 
@@ -1008,7 +1007,7 @@ void FED4::deleteLines(int n)
 
 void FED4::drawDateTime()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "drawDateTime";
 #endif
 
@@ -1043,7 +1042,7 @@ void FED4::drawDateTime()
 
 void FED4::drawBateryCharge()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "drawBateryCharge";
 #endif
 
@@ -1083,7 +1082,7 @@ void FED4::drawBateryCharge()
 
 void FED4::drawStats()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "drawStats";
 #endif
     
@@ -1110,7 +1109,7 @@ void FED4::drawStats()
 
 void FED4::displayLayout()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "displayLayout";
 #endif
 
@@ -1148,7 +1147,7 @@ void FED4::displayLayout()
 
 void FED4::updateDisplay(bool statusOnly)
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "updateDisplay";
 #endif
 
@@ -1168,19 +1167,18 @@ void FED4::updateDisplay(bool statusOnly)
 
 void FED4::runModeMenu()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "runModeMenu";
 #endif
 
     ignorePokes = true;
 
-    Menu *modeMenu = initMenu(nullptr, 9);
+    Menu *modeMenu = initMenu(9);
 
     Menu *clockMenu = initClockMenu(modeMenu);
     modeMenu->items[0] = initItem((char *)"Time", clockMenu);
 
-    int dev = deviceNumber;
-    modeMenu->items[1] = initItem((char *)"Dev no", &dev, 0, 99, 1);
+    modeMenu->items[1] = initItem((char *)"Dev no", &deviceNumber, 0, 99, 1);
 
     const char *modes[] = {"FR", "VI", "%"};
     modeMenu->items[2] = initItem((char *)"Mode", modes, 3);
@@ -1217,74 +1215,62 @@ void FED4::runModeMenu()
         mode = MODE_OTHER;
     }
 
-    deviceNumber = dev;
-    File deviceNumberFile = sd.open("DEVICE_NUMBER", FILE_WRITE);
-    deviceNumberFile.truncate(0);
-    deviceNumberFile.print(deviceNumber);
-    deviceNumberFile.flush();
-    deviceNumberFile.close();
-
-    freeMenu(modeMenu);
+    // freeMenu(modeMenu);
+    // delete(modeMenu);
     ignorePokes = false;
 }
 
 void FED4::runViMenu() {
-#ifdef DEBUG
+#ifdef DEB
     function = "runViMenu";
 #endif
 
     ignorePokes = true;
 
-    Menu *menu = initMenu(nullptr, 2);
+    Menu *menu = initMenu(2);
 
-    int avg = viAvg;
-    float s = viSpread;
-
-    menu->items[0] = initItem((char*)"Avg T", &avg, 0, 120, 5);
+    menu->items[0] = initItem((char*)"Avg T", &viAvg, 0, 120, 5);
     menu->items[1] = initItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
 
     runMenu(menu);
-
-    viAvg = avg;
-    viSpread = s;
-
-    freeMenu(menu);
+    
+    delete(menu);
     ignorePokes = false;
 }
 
 void FED4::runFrMenu() {
-#ifdef DEBUG
+#ifdef DEB
     function = "runFrMenu";
 #endif
 
     ignorePokes = true;
 
-    Menu *menu = initMenu(nullptr, 1);
+    Menu *menu = initMenu(1);
 
     menu->items[0] = initItem((char*)"Ratio", &ratio, 1, 10, 1);
 
     runMenu(menu);
 
-    freeMenu(menu);
+    // delete(menu);
     ignorePokes = false;
 }
 
 void FED4::runChanceMenu() {
     ignorePokes = true;
 
-    Menu *menu = initMenu(nullptr, 1);
+    Menu *menu = initMenu(1);
 
     menu->items[0] = initItem((char*)"Chance", &chance, 0.0, 1.0, 0.1);
 
     runMenu(menu);
-    freeMenu(menu);
 
+    // delete(menu);
     ignorePokes = false;
 }
 
 int FED4::getBatteryPercentage()
 {
-#ifdef DEBUG
+#ifdef DEB
     function = "getBatteryPercentage";
 #endif
 
@@ -1383,7 +1369,7 @@ int FED4::getBatteryPercentage()
 }
 
 DateTime FED4::getDateTime() {
-#ifdef DEBUG
+#ifdef DEB
     function = "getDateTime";
 #endif
     detachInterrupts();
@@ -1424,7 +1410,7 @@ void FED4::alarmISR()
 
 void FED4::dateTime(uint16_t *date, uint16_t *time)
 {
-#ifdef DEBUG
+#ifdef DEB
     instance->function = "dateTime";
 #endif
 

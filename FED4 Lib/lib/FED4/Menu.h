@@ -53,13 +53,15 @@ typedef struct MenuItem {
   int listLen;
 
   Menu *submenu;
+
+  ~MenuItem();
 } MenuItem;
 MenuItem* initItem(char* name, int* value, int min, int max, int step);
 MenuItem* initItem(char* name, float* value, float min, float max, float step);
 MenuItem* initItem(char* name, bool* value);
 MenuItem* initItem(char *name, const char** list, int listLen);
 MenuItem* initItem(char *name, Menu *submenu);
-void freeMenuItem(MenuItem *item);
+// void freeMenuItem(MenuItem *item);
 const char** initList(int listLen);
 void increaseInt(MenuItem *item);
 void decreaseInt(MenuItem *item);
@@ -77,10 +79,13 @@ typedef struct Menu {
   int itemNo;
   MenuItem *selectedItem;
   int selectedIdx;
+
+  ~Menu();
 } Menu;
+Menu* initMenu(int itemNo);
 Menu* initMenu(Menu *parent, int itemNo);
 Menu* initClockMenu(Menu *parent);
-void freeMenu(Menu *menu);
+// void freeMenu(Menu *menu);
 void handleRightBtn(Menu *item);
 void handleLeftBtn(Menu *item);
 void runMenu(Menu *menu, int batteryLevel = -1);
