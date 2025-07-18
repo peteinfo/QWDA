@@ -1182,9 +1182,19 @@ void FED4::runModeMenu()
 
     const char *modes[] = {"FR", "VI", "%"};
     modeMenu->items[2] = initItem((char *)"Mode", modes, 3);
+    modeMenu->items[2]->valueIdx = mode;
 
     const char *sensors[] = {"L&R", "L", "R"};
     modeMenu->items[3] = initItem((char *)"Sensor", sensors, 3);
+    if (activeSensor == BOTH) {
+        modeMenu->items[3]->valueIdx = 0;
+    }
+    else if (activeSensor == LEFT) {
+        modeMenu->items[3]->valueIdx = 1;
+    }
+    else {
+        modeMenu->items[3]->valueIdx = 2;
+    }
 
     modeMenu->items[4] = initItem((char *)"L Rew", &leftReward, 0, 255, 1);
     modeMenu->items[5] = initItem((char *)"R Rew", &rightReward, 0, 255, 1);
@@ -1194,7 +1204,6 @@ void FED4::runModeMenu()
     modeMenu->items[8] = initItem((char*)"Rew End", &windowEnd, 0, 23, 1);
 
     int batteryLevel = getBatteryPercentage();
-
     runMenu(modeMenu, batteryLevel);
 
     if (modeMenu->items[3]->valueIdx == 0)

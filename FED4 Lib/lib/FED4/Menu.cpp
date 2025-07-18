@@ -329,6 +329,7 @@ void printValue(MenuItem* item) {
       }
     }
     else if (item->type == ITEM_T_LIST) {
+      item->value = (void*)item->list[item->valueIdx];
       char *value = (char*)item->value;
       menu_display->print(value);
     }
@@ -478,10 +479,6 @@ void drawMenu(Menu *menu, int batteryLevel) {
 
   menu_display->refresh();
 }
-
-// void drawMenu(Menu *menu) {
-//   drawMenu(menu, -1);
-// }
 
 void drawListSelection(Menu* menu) {
   int x = COL_2_X - 2;
