@@ -2,41 +2,49 @@
 
 FED4 *FED4::instance = nullptr;
 
-FED4::FED4() {
+void __delay(uint32_t ms) {
+    unsigned long startT = millis();
+    while(millis() - startT > ms);
 }
 
-void FED4::begin()
-{
-#ifdef DEB
-    function = "begin";
-#endif
+void HardFault_Handler(void) {
+    __asm("BKPT #0");
+    while(1){}
+}
 
+FED4::FED4() {}
+
+void FED4::begin() {
     instance = this;
 
-    pinMode(MTR_EN_PIN, OUTPUT);
-    pinMode(MTR_1_PIN, OUTPUT);
-    pinMode(MTR_2_PIN, OUTPUT);
-    pinMode(MTR_3_PIN, OUTPUT);
-    pinMode(MTR_4_PIN, OUTPUT);
+    // Motor pins
+    pinMode(FED4Pins::MTR_EN, OUTPUT);
+    pinMode(FED4Pins::MTR_1, OUTPUT);
+    pinMode(FED4Pins::MTR_2, OUTPUT);
+    pinMode(FED4Pins::MTR_3, OUTPUT);
+    pinMode(FED4Pins::MTR_4, OUTPUT);
 
-    pinMode(LFT_POKE_PIN, INPUT_PULLUP);
-    pinMode(RGT_POKE_PIN, INPUT_PULLUP);
+    // Input pins
+    pinMode(FED4Pins::LFT_POKE, INPUT_PULLUP);
+    pinMode(FED4Pins::RGT_POKE, INPUT_PULLUP);
+    pinMode(FED4Pins::WELL, INPUT);
+    digitalWrite(FED4Pins::WELL, HIGH);
 
-    pinMode(WELL_PIN, INPUT);
-    digitalWrite(WELL_PIN, HIGH);
+    // Interrupts
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE), leftPokeIRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE), rightPokeIRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), wellISR, FALLING);
 
-    attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(WELL_PIN), wellISR, FALLING);
+    // Wakeup sources
+    EIC->WAKEUP.reg |= (1 << 4);   // FED4Pins::LFT_POKE
+    EIC->WAKEUP.reg |= (1 << 15);  // FED4Pins::RGT_POKE
+    EIC->WAKEUP.reg |= (1 << 16);  // RTC peripheral
 
-    EIC->WAKEUP.reg |= (1<<4); // Enable wakeup on pin 6 (LFT_POKE_PIN)
-    EIC->WAKEUP.reg |= (1<<15); // Enable wakeup on pin 5 (RGT_POKE_PIN)
-    EIC->WAKEUP.reg |= (1<<16); // Enable wakeup on pin RTC peripheral
-
+    // Clock setup
     SYSCTRL->XOSC32K.reg |= (SYSCTRL_XOSC32K_RUNSTDBY | SYSCTRL_XOSC32K_ONDEMAND);
     GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(GCM_EIC) |
-                      GCLK_CLKCTRL_CLKEN |
-                      GCLK_CLKCTRL_GEN_GCLK1;
+                        GCLK_CLKCTRL_CLKEN |
+                        GCLK_CLKCTRL_GEN_GCLK1;
     while (GCLK->STATUS.bit.SYNCBUSY);
 
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk; // Enable deep sleep mode
@@ -50,7 +58,7 @@ void FED4::begin()
     rtcZero.begin();
     rtcZero.setTime(rtc.now().hour(), rtc.now().minute(), rtc.now().second());
     rtcZero.setDate(rtc.now().day(), rtc.now().month(), rtc.now().year() - 2000);
-    uint8_t alarmSeconds = rtcZero.getSeconds() + LP_DISPLAY_REFRESH_RATE;
+    uint8_t alarmSeconds = rtcZero.getSeconds() + LP_AWAKE_PERIOD;
     if (alarmSeconds >= 59) {
         alarmSeconds -= 60;
     }
@@ -60,21 +68,31 @@ void FED4::begin()
 
     randomSeed(rtc.now().unixtime());
 
+    display = Adafruit_SharpMem (
+        FED4Pins::SHRP_SCK, FED4Pins::SHRP_MOSI, FED4Pins::SHRP_CS,  
+        DISPLAY_H, DISPLAY_W
+    );
+
+    stepper = Stepper (
+        STEPS, 
+        FED4Pins::MTR_1, FED4Pins::MTR_2, FED4Pins::MTR_3, FED4Pins::MTR_4
+    ); 
     stepper.setSpeed(7);
+
+    strip = Adafruit_NeoPixel (
+        10, FED4Pins::NEOPXL, NEO_GRBW + NEO_KHZ800
+    );
 
     display.begin();
     display.clearDisplay();
     display.setRotation(3);
     display.refresh();
 
-    digitalWrite(MTR_EN_PIN, HIGH);
-    unsigned long startT = millis();
-    while(millis() - startT > 2);
+    digitalWrite(FED4Pins::MTR_EN, HIGH);
+    __delay(2);
     strip.begin();
     strip.clear();
     strip.show();
-
-    // logFileName.reserve(20);
     
     SdFile::dateTimeCallback(dateTime);
     initSD();
@@ -83,17 +101,17 @@ void FED4::begin()
     
     menu_display = &display;
     menu_rtc = &rtc;
-    runModeMenu();
-    if (mode == MODE_FR) {
+    runConfigMenu();
+    if (mode == Mode::FR) {
         runFrMenu();
     }
-    if (mode == MODE_VI) {
+    if (mode == Mode::VI) {
         runViMenu();
     }
-    if (mode == MODE_CHANCE) {
+    if (mode == Mode::CHANCE) {
         runChanceMenu();
     }
-    if (mode == MODE_OTHER) {
+    if (mode == Mode::OTHER) {
         runOtherModeMenu();
     }
 
@@ -107,15 +125,8 @@ void FED4::begin()
     ignorePokes = false;
 }
 
-
-long lastBatteryLog = 0;
-void FED4::run()
-{
-#ifdef DEB
-    function = "run";   
-#endif
-
-    setCue();
+void FED4::run() {
+    setLightCue();
     
     updateDisplay();    
     
@@ -159,22 +170,22 @@ bool FED4::checkCondition() {
         return false;
     }
 
-    if (mode == MODE_FR) {
+    if (mode == Mode::FR) {
         return checkFRCondition();
     }
-    if (mode == MODE_VI) {
+    if (mode == Mode::VI) {
         return checkVICondition();
     }
-    if (mode == MODE_CHANCE) {
+    if (mode == Mode::CHANCE) {
         return checkChanceCondition();
     }
-    if (mode == MODE_OTHER) {
+    if (mode == Mode::OTHER) {
         return checkChanceCondition();
     }
     return false;
 }
 
-bool FED4::checkFRCondition(){
+bool FED4::checkFRCondition() {
     if (
         activeSensor == BOTH
          && (leftPokeCount + rightPokeCount) % ratio == 0 
@@ -241,7 +252,7 @@ bool FED4::checkVICondition() {
 
             Event e = Event {
                         .time = getDateTime(),
-                        .event = EVENT_SET_VI
+                        .event = EventID::SET_VI
                     };
                     logEvent(e);
 
@@ -274,12 +285,11 @@ bool FED4::checkChanceCondition() {
     return false;
 }
 
-void FED4::setCue() {
-    detachInterrupts();
+void FED4::setLightCue() {
+    pauseInterrupts();
     if (checkFeedingWindow()) {
-        digitalWrite(MTR_EN_PIN, HIGH);
-        unsigned long startT = millis();
-        while(millis() - startT > 2);
+        digitalWrite(FED4Pins::MTR_EN, HIGH);
+        __delay(2);
 
         if (activeSensor == BOTH) {
             strip.setPixelColor(8, 5, 2, 0, 0);
@@ -295,69 +305,17 @@ void FED4::setCue() {
         }
         strip.show();
     } else {
-        digitalWrite(MTR_EN_PIN, HIGH);
-        unsigned long startT = millis();
-        while(millis() - startT > 2);
+        digitalWrite(FED4Pins::MTR_EN, HIGH);
+        __delay(2);
         strip.clear();
         strip.show();
-        digitalWrite(MTR_EN_PIN, LOW);
+        digitalWrite(FED4Pins::MTR_EN, LOW);
     }
 
-    attachInterrupts();
-}
-
-void FED4::reset()
-{
-#ifdef DEB
-    function = "reset";
-#endif
-
-    ignorePokes = true;
-    
-    makeNoise(300);
-    print("Resetting...");
-    
-    Event event;
-    event.time = getDateTime();
-    event.event = "Reset";
-    logEvent(event);
-    
-    long startWait = millis();
-    while (millis() - startWait < 5000);
-    
-    leftPokeCount = 0;
-    rightPokeCount = 0;
-    pelletsDispensed = 0;
-    viCountDown = 0;
-    viSet = false;
-    
-    startLftPoke = millis();
-    startRgtPoke = millis();
-    
-    leftPoke = false;
-    rightPoke = false;
-
-    if(mode == MODE_FR) {
-        runFrMenu();
-    }
-    if (mode == MODE_VI) {
-        runViMenu();
-    }
-    
-    initLogFile();
-    
-    displayLayout();
-
-    ignorePokes = false;
-
-    if (entryPoint) entryPoint();
+    startInterrupts();
 }
 
 void FED4::logError(String str) {
-#ifdef DEB
-    function = "logError";
-#endif
-
     char errorMsg[100] = "";
     snprintf(errorMsg, sizeof(errorMsg), "Error: %s", str.c_str());
     Event event = {
@@ -377,14 +335,14 @@ void FED4::loadConfig() {
     deviceNumber = config["device number"]; 
 
     if (config["mode"]["name"] == "FR") {
-        mode = MODE_FR;
+        mode = Mode::FR;
         ratio = config["mode"]["ratio"];
     } else if (config["mode"]["name"] == "VI") {
-        mode = MODE_VI;
+        mode = Mode::VI;
         viAvg = config["mode"]["avg"];
         viSpread = config["mode"]["spread"];
     } else if (config["mode"]["name"] == "CHANCE") {
-        mode = MODE_CHANCE;
+        mode = Mode::CHANCE;
         chance = config["mode"]["chance"];
     }
 
@@ -416,14 +374,14 @@ void FED4::saveConfig() {
 
     config["device number"] = 0;
 
-    if (mode == MODE_FR) {
+    if (mode == Mode::FR) {
         config["mode"]["name"] = "FR";
         config["mode"]["ratio"] = ratio;
-    } else if (mode == MODE_VI) {
+    } else if (mode == Mode::VI) {
         config["mode"]["name"] = "VI";
         config["mode"]["avg"] = viAvg;
         config["mode"]["spread"] = viSpread;
-    } else if (mode == MODE_CHANCE) {
+    } else if (mode == Mode::CHANCE) {
         config["mode"]["name"] = "CHANCE";
         config["mode"]["chance"] = chance;
     }
@@ -450,62 +408,39 @@ void FED4::saveConfig() {
     configFile.close();
 }
 
-void FED4::attachInterrupts() {
-#ifdef DEB
-    function = "attachInterrupts";
-#endif
+void FED4::startInterrupts() {
     noInterrupts();
-    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(LFT_POKE_PIN));
-    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(RGT_POKE_PIN));
-    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(WELL_PIN));
-    attachInterrupt(digitalPinToInterrupt(WELL_PIN), wellISR, FALLING);
+
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::LFT_POKE));
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::RGT_POKE));
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::WELL));
     rtcZero.attachInterrupt(alarmISR);
     __DSB();
 
     interrupts();
 }
 
-void FED4::detachInterrupts() {
-#ifdef DEB
-    function = "detachInterrupts";
-#endif
+void FED4::pauseInterrupts() {
     noInterrupts();
     rtcZero.detachInterrupt();
 }
 
 void FED4::sleep() {
-#ifdef DEB
-    function = "sleep";
-#endif
-
     sleepMode = true;
     __DSB();
     while(sleepMode) {
         __WFI();
     }
-
-#ifdef DEB
-    function = "WFI";
-#endif
 }
 
 int FED4::getViCountDown() {
-#ifdef DEB
-    function = "getViCountDown";
-#endif
-
     int offset = (float)viAvg * viSpread;
     int lowerBound = viAvg - offset;
     int upperBound = viAvg + offset;
     return random(lowerBound, upperBound);
 }
 
-bool FED4::getLeftPoke()
-{
-#ifdef DEB
-    function = "getLeftPoke";
-#endif
-
+bool FED4::getLeftPoke() {
     if (leftPoke)
     {
         leftPoke = false;
@@ -514,12 +449,7 @@ bool FED4::getLeftPoke()
     return false;
 }
 
-bool FED4::getRightPoke()
-{
-#ifdef DEB
-    function = "getRightPoke";
-#endif
-
+bool FED4::getRightPoke() {
     if (rightPoke)
     {
         rightPoke = false;
@@ -529,10 +459,6 @@ bool FED4::getRightPoke()
 }
 
 bool FED4::getWellStatus() {
-#ifdef DEB
-    function = "getWellStatus";
-#endif
-
     if(pelletDropped) {
         pelletDropped = false;
         return true;
@@ -540,19 +466,13 @@ bool FED4::getWellStatus() {
     return false;
 }
 
-void FED4::leftPokeHandler()
-{
-#ifdef DEB
-    interrupedFunction = function;
-    function = "leftPokeHandler";
-#endif
-
+void FED4::leftPokeHandler() {
     sleepMode = false;
 
     if (ignorePokes)
         return;
 
-    if (digitalRead(LFT_POKE_PIN) == LOW)
+    if (digitalRead(FED4Pins::LFT_POKE) == LOW)
     {
         long millis_now = millis();
         if (millis_now - startLftPoke < 50)
@@ -568,7 +488,7 @@ void FED4::leftPokeHandler()
         leftPokeCount++;
         Event event = {
             .time = getDateTime(),
-            .event = EVENT_LEFT
+            .event = EventID::LEFT
         };
         logEvent(event);
         leftPokeStarted = false;
@@ -577,19 +497,13 @@ void FED4::leftPokeHandler()
     }
 }
 
-void FED4::rightPokeHandler()
-{
-#ifdef DEB
-    interrupedFunction = function;
-    function = "rightPokeHandler";
-#endif
-
+void FED4::rightPokeHandler() {
     sleepMode = false;
 
     if (ignorePokes)
         return;
 
-    if (digitalRead(RGT_POKE_PIN) == LOW)
+    if (digitalRead(FED4Pins::RGT_POKE) == LOW)
     {
         long millis_now = millis();
         if (millis_now - startRgtPoke < 50)
@@ -605,7 +519,7 @@ void FED4::rightPokeHandler()
         rightPokeCount++;
         Event event = {
             .time = getDateTime(),
-            .event = EVENT_RIGHT
+            .event = EventID::RIGHT
         };
         logEvent(event);
         rightPokeStarted = false;
@@ -615,25 +529,10 @@ void FED4::rightPokeHandler()
 }
 
 void FED4::wellHandler() {
-#ifdef DEB
-    interrupedFunction = function;
-    function = "wellHandler";
-#endif
-
     pelletDropped = true;
 }
 
 void FED4::alarmHandler() {
-#ifdef DEB
-    interrupedFunction = function;
-    function = "alarmHandler";
-    Event event = {
-        .time = getDateTime(),
-        .event = "Alarm Triggered"
-    };
-    logEvent(event);
-#endif
-
     if (sleepMode) {
         if (checkFeedingWindow()) {
             sleepMode = false;
@@ -642,7 +541,7 @@ void FED4::alarmHandler() {
         updateDisplay(true);
         flushToSD();
 
-        uint8_t alarmSeconds = rtcZero.getSeconds() + LP_DISPLAY_REFRESH_RATE - 1;
+        uint8_t alarmSeconds = rtcZero.getSeconds() + LP_AWAKE_PERIOD - 1;
         uint8_t alarmMinutes = rtcZero.getMinutes() + (alarmSeconds / 60);
         uint8_t alarmHours = rtcZero.getHours() + (alarmMinutes / 60);
         alarmSeconds = alarmSeconds % 60;
@@ -650,15 +549,11 @@ void FED4::alarmHandler() {
         alarmHours = alarmHours % 24;
         rtcZero.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
 
-        attachInterrupts();
+        startInterrupts();
     }
 }
 
-void FED4::feed(int pellets, bool wait)
-{
-#ifdef DEB
-    function = "feed";
-#endif
+void FED4::feed(int pellets, bool wait) {
     if (jamError) return;
 
     pelletDropped = false;
@@ -693,11 +588,10 @@ void FED4::feed(int pellets, bool wait)
         pelletsDispensed++;
         Event event = {
             .time = getDateTime(),
-            .event = EVENT_PEL
+            .event = EventID::PEL
         };
         logEvent(event);
-        unsigned long startT = millis();
-        while(millis() - startT > 200);
+        __delay(200);
     }
 
     leftPoke = false;
@@ -706,40 +600,24 @@ void FED4::feed(int pellets, bool wait)
     updateDisplay();
 }
 
-void FED4::rotateWheel(int degrees)
-{
-#ifdef DEB
-    function = "rotateWheel";
-#endif
-
-    digitalWrite(MTR_EN_PIN, HIGH);
+void FED4::rotateWheel(int degrees) {
+    digitalWrite(FED4Pins::MTR_EN, HIGH);
 
     int steps = (STEPS * degrees / 360);
     stepper.step(steps);
 
-    digitalWrite(MTR_EN_PIN, LOW);
+    digitalWrite(FED4Pins::MTR_EN, LOW);
 }
 
-void FED4::makeNoise(int duration)
-{
-#ifdef DEB
-    function = "makeNoise";
-#endif
-
+void FED4::makeNoise(int duration) {
     for (int i = 0; i < duration / 50; i++)
     {
-        tone(BUZZER_PIN, random(50, 250), 50);
-        unsigned long startT = millis();
-        while(millis() - startT > duration/50);
+        tone(FED4Pins::BUZZER, random(50, 250), 50);
+        __delay((uint32_t)(duration / 50));
     }
 }
 
-void FED4::print(String str, uint8_t size)
-{
-#ifdef DEB
-    function = "print";
-#endif
-
+void FED4::print(String str, uint8_t size) {
     display.setTextSize(size);
     display.fillRect(2, 106, DISPLAY_W - 4, 16, WHITE);
     display.setTextColor(BLACK);
@@ -748,26 +626,16 @@ void FED4::print(String str, uint8_t size)
     display.refresh();
 }
 
-void FED4::initSD()
-{
-#ifdef DEB
-    function = "initSD";
-#endif
+void FED4::initSD() {
+    digitalWrite(FED4Pins::MTR_EN, LOW);
 
-    digitalWrite(MTR_EN_PIN, LOW);
-
-    while (!sd.begin(CARD_SEL_PIN, SD_SCK_MHZ(4)))
+    while (!sd.begin(FED4Pins::CARD_SEL, SD_SCK_MHZ(4)))
     {
         showSdError();
     }
 }
 
-void FED4::showSdError()
-{
-#ifdef DEB
-    function = "showSdError";
-#endif
-
+void FED4::showSdError() {
     display.setTextSize(2);
     display.setTextColor(BLACK);
     display.clearDisplay();
@@ -783,13 +651,8 @@ void FED4::showSdError()
     delay(1000);
 }
 
-void FED4::initLogFile()
-{   
-#ifdef DEB
-    function = "initLogFile";
-#endif
-
-    digitalWrite(MTR_EN_PIN, LOW);
+void FED4::initLogFile() {   
+    digitalWrite(FED4Pins::MTR_EN, LOW);
     char fileName[30] = "";
 
     DateTime now = getDateTime();
@@ -823,29 +686,26 @@ void FED4::initLogFile()
     logFile.createContiguous(fileName, FILE_PREALLOC_SIZE);
     logFile.rewind();
 
-#ifdef DEB
-    logFile.print("TimeStamp,Battery,Device Number,Function,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
-#else
     logFile.print("TimeStamp,Battery,Device Number,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
-#endif
 
-    if (mode == MODE_VI)
+    if (mode == Mode::VI)
     logFile.print(",VI Count Down");
-    if (mode == MODE_FR)
+    if (mode == Mode::FR)
     logFile.print(",Ratio");
     logFile.print("\n");
 
     logFile.flush();
 }
+
 void FED4::flushToSD() {
-    detachInterrupts();
+    pauseInterrupts();
 
     if (logBufferPos == 0) {
         return;
     }
 
-    digitalWrite(CARD_SEL_PIN, LOW);
-    digitalWrite(SHRP_CS_PIN, HIGH);
+    digitalWrite(FED4Pins::CARD_SEL, LOW);
+    digitalWrite(FED4Pins::SHRP_CS, HIGH);
 
     logFile.write(logBuffer, logBufferPos);
     logBufferPos = 0;
@@ -856,11 +716,11 @@ void FED4::flushToSD() {
     logFile.close();
     logFile.open(logFileName, FILE_WRITE);
 
-    attachInterrupts();
+    startInterrupts();
 }
 
 void FED4::writeToLog(char row[ROW_MAX_LEN], bool forceFlush) {
-    detachInterrupts();
+    pauseInterrupts();
 
     int rowLen = strlen(row);
     if(logBufferPos + rowLen >= FILE_RAM_BUFF_SIZE) {
@@ -875,15 +735,10 @@ void FED4::writeToLog(char row[ROW_MAX_LEN], bool forceFlush) {
         flushToSD();
     }
 
-    attachInterrupts();
+    startInterrupts();
 }
 
-void FED4::logEvent(Event e)
-{
-#ifdef DEB
-    function = "logEvent";
-#endif
-
+void FED4::logEvent(Event e) {
     char row[ROW_MAX_LEN] = "";
     DateTime now = getDateTime();
     
@@ -905,21 +760,14 @@ void FED4::logEvent(Event e)
     strcat(row, deviceNumber_str);
     strcat(row, ",");
 
-#ifdef DEB
-    char function_name[50];
-    sprintf(function_name, "%s", interrupedFunction.c_str());
-    strcat(row, function_name);
-    strcat(row, ",");
-#endif
-
     char mode_str[10];
-    if (mode == MODE_FR)
+    if (mode == Mode::FR)
         sprintf(mode_str, "FR");
-    else if (mode == MODE_VI)
+    else if (mode == Mode::VI)
         sprintf(mode_str, "VI");
-    else if (mode == MODE_CHANCE) 
+    else if (mode == Mode::CHANCE) 
         sprintf(mode_str, "CHANCE");
-    else if (mode == MODE_OTHER)
+    else if (mode == Mode::OTHER)
         sprintf(mode_str, "OTHER");
     strcat(row, mode_str);
     strcat(row, ",");
@@ -965,21 +813,21 @@ void FED4::logEvent(Event e)
     sprintf(pelletsDispensed_str, "%d", pelletsDispensed);
     strcat(row, pelletsDispensed_str);
     
-    if (mode == MODE_VI)
+    if (mode == Mode::VI)
     {
         strcat(row, ",");
         char viCountDown_str[10];
         sprintf(viCountDown_str, "%d", viCountDown);
         strcat(row, viCountDown_str);
     }
-    if (mode == MODE_FR)
+    if (mode == Mode::FR)
     {
         strcat(row, ",");
         char ratio_str[10];
         sprintf(ratio_str, "%d", ratio);
         strcat(row, ratio_str);
     }
-    if (mode == MODE_CHANCE) {
+    if (mode == Mode::CHANCE) {
         strcat(row, ",");
         char chance_str[8];
         sprintf(chance_str, "%.2f", chance);
@@ -991,48 +839,7 @@ void FED4::logEvent(Event e)
     writeToLog(row);
 }
 
-void FED4::deleteLines(int n)
-{
-#ifdef DEB
-    function = "deleteLines";
-#endif
-    
-    // int newLineCount = 0;
-    // uint lastNewLinePos = 0;
-    // uint fileSize = logFile.size();
-
-    // for (uint i = fileSize - 1; i >= 0; i--)
-    // {
-    //     logFile.seek(i);
-    //     if (logFile.read() == '\n')
-    //     {
-    //         newLineCount++;
-    //         if (newLineCount == n + 1)
-    //         {
-    //             lastNewLinePos = i + 1;
-    //             break;
-    //         }
-    //     }
-    // }
-
-    // if (newLineCount <= n)
-    // {
-    //     lastNewLinePos = 0;
-    // }
-
-    // logFile.truncate(lastNewLinePos);
-    // logFile.flush();
-    // logFile.close();
-
-    return;
-}
-
-void FED4::drawDateTime()
-{
-#ifdef DEB
-    function = "drawDateTime";
-#endif
-
+void FED4::drawDateTime() {
     DateTime now = getDateTime();
 
     display.setTextSize(1);
@@ -1062,12 +869,7 @@ void FED4::drawDateTime()
     display.print(now.minute());
 }
 
-void FED4::drawBateryCharge()
-{
-#ifdef DEB
-    function = "drawBateryCharge";
-#endif
-
+void FED4::drawBateryCharge() {
     // cover up the battery symbol
     display.fillRect(129, 3, 37, 14, WHITE);
 
@@ -1102,12 +904,7 @@ void FED4::drawBateryCharge()
     }
 }
 
-void FED4::drawStats()
-{
-#ifdef DEB
-    function = "drawStats";
-#endif
-    
+void FED4::drawStats() {
     display.setTextSize(2);
 
     display.fillRect(98, 24, 100, 80, WHITE);
@@ -1121,7 +918,7 @@ void FED4::drawStats()
     display.setCursor(100, 66);
     display.print(pelletsDispensed);
 
-    if (mode == MODE_VI) {
+    if (mode == Mode::VI) {
         display.setCursor(100, 86);
         if (viCountDown >= 0) {
             display.print(viCountDown);
@@ -1129,12 +926,7 @@ void FED4::drawStats()
     }
 }
 
-void FED4::displayLayout()
-{
-#ifdef DEB
-    function = "displayLayout";
-#endif
-
+void FED4::displayLayout() {
     display.clearDisplay();
 
     // draw the top line
@@ -1149,7 +941,7 @@ void FED4::displayLayout()
     display.print("Right: ");
     display.setCursor(4, 66);
     display.print("Pellets: ");
-    if (mode == MODE_VI)
+    if (mode == Mode::VI)
     {
         display.setCursor(4, 86);
         display.print("VI CD: ");
@@ -1157,9 +949,9 @@ void FED4::displayLayout()
 
     display.setTextSize(1);
     display.setCursor(4, 124);
-    if (mode == MODE_FR)
+    if (mode == Mode::FR)
         display.print("Fixed Ratio");
-    else if (mode == MODE_VI)
+    else if (mode == Mode::VI)
         display.print("Variable Interval");
     display.setCursor(4, 134);
     char logFileName[30];
@@ -1169,15 +961,10 @@ void FED4::displayLayout()
     updateDisplay(true);
 }
 
-void FED4::updateDisplay(bool statusOnly)
-{
-#ifdef DEB
-    function = "updateDisplay";
-#endif
-
-    detachInterrupts();
-    digitalWrite(SHRP_CS_PIN, LOW);
-    digitalWrite(CARD_SEL_PIN, HIGH);
+void FED4::updateDisplay(bool statusOnly) {
+    pauseInterrupts();
+    digitalWrite(FED4Pins::SHRP_CS, LOW);
+    digitalWrite(FED4Pins::CARD_SEL, HIGH);
     
     if (!statusOnly) {
         drawStats();
@@ -1192,15 +979,10 @@ void FED4::updateDisplay(bool statusOnly)
 
     display.refresh();
 
-    attachInterrupts();
+    startInterrupts();
 }
 
-void FED4::runModeMenu()
-{
-#ifdef DEB
-    function = "runModeMenu";
-#endif
-
+void FED4::runConfigMenu() {
     ignorePokes = true;
 
     Menu *modeMenu = initMenu(9);
@@ -1251,7 +1033,7 @@ void FED4::runModeMenu()
 
     mode = modeMenu->items[2]->valueIdx;
     if(mode > 2) {
-        mode = MODE_OTHER;
+        mode = Mode::OTHER;
     }
 
     // freeMenu(modeMenu);
@@ -1260,10 +1042,6 @@ void FED4::runModeMenu()
 }
 
 void FED4::runViMenu() {
-#ifdef DEB
-    function = "runViMenu";
-#endif
-
     ignorePokes = true;
 
     Menu *menu = initMenu(2);
@@ -1278,10 +1056,6 @@ void FED4::runViMenu() {
 }
 
 void FED4::runFrMenu() {
-#ifdef DEB
-    function = "runFrMenu";
-#endif
-
     ignorePokes = true;
 
     Menu *menu = initMenu(1);
@@ -1307,15 +1081,10 @@ void FED4::runChanceMenu() {
     ignorePokes = false;
 }
 
-int FED4::getBatteryPercentage()
-{
-#ifdef DEB
-    function = "getBatteryPercentage";
-#endif
-
-    detachInterrupts();
-    float batteryVoltage = analogRead(VBAT_PIN);
-    attachInterrupts();
+int FED4::getBatteryPercentage() {
+    pauseInterrupts();
+    float batteryVoltage = analogRead(FED4Pins::VBAT);
+    startInterrupts();
 
     batteryVoltage *= 2;
     batteryVoltage *= 3.3;
@@ -1411,57 +1180,40 @@ int FED4::getBatteryPercentage()
 }
 
 DateTime FED4::getDateTime() {
-#ifdef DEB
-    function = "getDateTime";
-#endif
-    detachInterrupts();
+    pauseInterrupts();
 
     DateTime now = rtc.now();
 
-    attachInterrupts();
+    startInterrupts();
     return now;
 }
 
-void FED4::leftPokeIRS()
-{
+void FED4::leftPokeIRS() {
     if (instance) {
         instance->leftPokeHandler();
     }
 }
 
-void FED4::rightPokeIRS()
-{
+void FED4::rightPokeIRS() {
     if (instance) {
         instance->rightPokeHandler();
     }
 }
 
-void FED4::wellISR()
-{
+void FED4::wellISR() {
     if (instance) {
         instance->wellHandler();
     }
 }
 
-void FED4::alarmISR()
-{
+void FED4::alarmISR() {
     if (instance) {
         instance->alarmHandler();
     }
 }
 
-void FED4::dateTime(uint16_t *date, uint16_t *time)
-{
-#ifdef DEB
-    instance->function = "dateTime";
-#endif
-
+void FED4::dateTime(uint16_t *date, uint16_t *time) {
     DateTime now = instance->getDateTime();
     *date = FAT_DATE(now.year(), now.month(), now.day());
     *time = FAT_TIME(now.hour(), now.minute(), now.second());
-}
-
-void HardFault_Handler(void) {
-    __asm("BKPT #0");
-    while(1){}
 }

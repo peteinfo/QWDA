@@ -2,216 +2,227 @@
 #define FED4_H
 
 #include <Arduino.h>
-#include <Adafruit_BusIO_Register.h>
-#include <Adafruit_I2CDevice.h>
-#include <Adafruit_I2CRegister.h>
-#include <Adafruit_SPIDevice.h>
-#include <Wire.h>
-#include <SPI.h>
-#include <Stepper.h>
+#include <functional>
+
+#include <Adafruit_NeoPixel.h>
+#include <Adafruit_SharpMem.h>
+#include <ArduinoJson.h>
 #include <RTClib.h>
 #include <RTCZero.h>
 #include <SdFat.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SharpMem.h>
-#include <Adafruit_NeoPixel.h>
-#include <Adafruit_AHTX0.h>
-#include <functional>
-#include <ArduinoJson.h>
-
-#define DEBUG
+#include <Stepper.h>
 
 #include "Menu.h"
 
-#define NEOPXL_PIN      A1
-#define GRN_LED_PIN     8
-#define WELL_PIN        1
-#define LFT_POKE_PIN    6
-#define RGT_POKE_PIN    5
-#define BUZZER_PIN      0
-#define VBAT_PIN        A7
-#define CARD_SEL_PIN    4
-#define BNC_OUT_PIN     A0
-#define SHRP_SCK_PIN    12
-#define SHRP_MOSI_PIN   11
-#define SHRP_CS_PIN     10
-#define MTR_EN_PIN      13
-#define MTR_1_PIN       A2
-#define MTR_2_PIN       A3
-#define MTR_3_PIN       A4
-#define MTR_4_PIN       A5
+#define DEBUG // Without this the code doesn't run ???
 
-#define LP_DISPLAY_REFRESH_RATE 30 // seconds
+constexpr uint16_t LP_AWAKE_PERIOD = 30; // seconds
 
-#define MODE_FR 0
-#define MODE_VI 1
-#define MODE_CHANCE 2
-#define MODE_OTHER -1
+constexpr uint16_t DISPLAY_H = 144; // pxls
+constexpr uint16_t DISPLAY_W = 168; // pxls
 
-#define LEFT    0
-#define RIGHT   1
-#define BOTH    2
+constexpr size_t ROW_MAX_LEN        = 500;
+constexpr size_t FILE_RAM_BUFF_SIZE = 1024; // BYTES
+constexpr size_t FILE_PREALLOC_SIZE = 25 * 1024UL * 1024UL; // 25MB 
 
-#define DISPLAY_H 144
-#define DISPLAY_W 168
-#define BLACK 0
-#define WHITE 1
+constexpr uint16_t STEPS = 2048;
 
-#define ROW_MAX_LEN        500
-#define FILE_RAM_BUFF_SIZE 1024
-#define FILE_PREALLOC_SIZE 25 * 1024UL * 1024UL
+namespace FED4Pins {
+    constexpr uint8_t NEOPXL    = A1;
+    constexpr uint8_t GRN_LED   = 8;
+    constexpr uint8_t WELL      = 1;
+    constexpr uint8_t LFT_POKE  = 6;
+    constexpr uint8_t RGT_POKE  = 5;
+    constexpr uint8_t BUZZER    = 0;
+    constexpr uint8_t VBAT      = A7;
+    constexpr uint8_t CARD_SEL  = 4;
+    constexpr uint8_t BNC_OUT   = A0;
+    constexpr uint8_t SHRP_SCK  = 12;
+    constexpr uint8_t SHRP_MOSI = 11;
+    constexpr uint8_t SHRP_CS   = 10;
+    constexpr uint8_t MTR_EN    = 13;
+    constexpr uint8_t MTR_1     = A2;
+    constexpr uint8_t MTR_2     = A3;
+    constexpr uint8_t MTR_3     = A4;
+    constexpr uint8_t MTR_4     = A5;
+}
 
-#define STEPS 2048
+namespace Mode {
+    constexpr int8_t FR      = 0;
+    constexpr int8_t VI      = 1;
+    constexpr int8_t CHANCE  = 2;
+    constexpr int8_t OTHER   = -1;
+};
 
-#define EVENT_LEFT  "Left Poke"
-#define EVENT_RIGHT "Right Poke"
-#define EVENT_PEL   "Dropped Pellet"
-#define EVENT_WELL  "Well Cleared"
-#define EVENT_SET_VI "Set VI"
-#define EVENT_RESET "Reset Device"
-#define EVENT_NONE  ""
+namespace ActiveSensor {
+    constexpr uint8_t LEFT    = 0;
+    constexpr uint8_t RIGHT   = 1;
+    constexpr uint8_t BOTH    = 2;
+};
+ 
+
+namespace EventID {
+    constexpr const  char* LEFT     = "Left Poke";
+    constexpr const  char* RIGHT    = "Right Poke";
+    constexpr const  char* PEL      = "Dropped Pellet";
+    constexpr const  char* WELL     = "Well Cleared";
+    constexpr const  char* SET_VI   = "Set VI";
+    constexpr const  char* RESET    = "Reset Device";
+    constexpr const  char* NONE     = "";
+}
 
 struct Event {
     DateTime time;
-    const char *event;
-    ~Event() {};
+    const char* event;
 };
 
+namespace ErrorMsg {
+    constexpr const char* JAM = "JAM OR NO PELLETS"; 
+}
+
+
 class FED4 {
-private:
-    volatile bool sleepMode = false;
-
-    volatile bool leftPokeStarted = false;
-    volatile bool rightPokeStarted = false;
-
-    volatile bool leftPoke = false;
-    volatile bool rightPoke = false;
-    bool pelletDropped = false;
-
-    volatile long startLftPoke = 0;
-    volatile long startRgtPoke = 0;
-
-    long dtLftPoke = 0;
-    long dtRgtPoke = 0;
-
-    long lastStatsUpdate= 0;
-    long lastStatusUpdate = 0;
-
-    bool jamError = false;
-public:
+    public:
+    static FED4* instance;  
+    
     FED4();
-    static FED4* instance;
-    int deviceNumber = 0;
+    
+    // ==== Hardware Objects ====
+    SdFat sd;
+    RTC_PCF8523 rtc;
+    RTCZero rtcZero;
+    Adafruit_SharpMem display;
+    Stepper stepper; 
+    Adafruit_NeoPixel strip;
 
-#ifdef DEBUG
-    String function;
-    String interrupedFunction;
-#endif
 
-    volatile int leftPokeCount = 0;
-    volatile int rightPokeCount = 0;
-    int pelletsDispensed = 0;
-    int leftReward = 1;
-    int rightReward = 1;
-    uint8_t activeSensor = BOTH;
+    // ==== Pulbic Flags ====
+    bool ignorePokes = false;
+
+
+    // ==== Device State ====
+    uint16_t leftPokeCount = 0;
+    uint16_t rightPokeCount = 0;
+    uint16_t pelletsDispensed = 0;
+    
+    uint8_t deviceNumber = 0;
+    uint8_t activeSensor = ActiveSensor::BOTH;
+    uint8_t leftReward = 1;
+    uint8_t rightReward = 1;
     bool feedWindow = true;
-    int windowStart = 9;
-    int windowEnd = 12;
-
-    int ratio = 1;
-    int viAvg = 30;
+    uint8_t windowStart = 9;
+    uint8_t windowEnd = 12;
+    
+    SdFile logFile;
+    
+    // Mode Specific
+    int8_t mode = Mode::VI;
+    uint8_t ratio = 1;
+    uint8_t viAvg = 30;
     float viSpread = 0.75;
-    int viCountDown = 0;
+    uint16_t viCountDown = 0;
     uint32_t feedUnixT = 0;
     bool viSet = false;
     float chance = 0.5;
-
-    int getViCountDown();
-
-    int8_t mode = MODE_OTHER;
-
-    int reward;
-    bool checkFRCondition();
-    bool checkVICondition();
-    bool checkChanceCondition();
-    std::function<bool()> checkOtherCondition = nullptr;
-
-    std::function<void()> entryPoint = nullptr;
+    
+    
+    // ==== API ====
     void begin();
     void run();
-    void reset();
-    void logError(String str);
-
+    void sleep();
+    
+    void feed(int pellets = 1, bool wait = true);
+    void rotateWheel(int degrees);
+    
     void loadConfig();
     void saveConfig();
-
-    bool checkCondition();
-    bool checkFeedingWindow();
-
-    void setCue();
-
-    void attachInterrupts();
-    void detachInterrupts();
-
-    bool enableSleep = true;
-    void sleep();
     
     bool getLeftPoke();
     bool getRightPoke(); 
     bool getWellStatus();
     
-    void feed(int pellets = 1, bool wait = true);
-    void rotateWheel(int degrees);
-    
-    SdFat sd;
-    SdFile logFile;
     void initSD();
     void showSdError();
     void initLogFile();
     void logEvent(Event e);
-    void deleteLines(int n);
-
-    void displayLayout();
+    void logError(String str);
+    
     void updateDisplay(bool timeOnly = false);
+    void displayLayout();
+    void print(String str, uint8_t size = 2);
     void drawDateTime();
     void drawBateryCharge();
     void drawStats();
-
-    void runModeMenu();
+    
+    void makeNoise(int duration = 300);
+    
+    void runConfigMenu();
     void runViMenu();
     void runFrMenu();
     void runChanceMenu();
     std::function<void()> runOtherModeMenu = nullptr;
     
-    void makeNoise(int duration = 300);
-    void print(String str, uint8_t size = 2);
-
-    int getBatteryPercentage();
-    DateTime getDateTime();
+    bool checkCondition();
+    bool checkFeedingWindow();
     
-    bool ignorePokes = false;
+    void setLightCue();
+    int getViCountDown();
+    
+    bool checkFRCondition();
+    bool checkVICondition();
+    bool checkChanceCondition();
+    std::function<bool()> checkOtherCondition = nullptr;
+    
+    DateTime getDateTime();
+    int getBatteryPercentage();
+    
+    void startInterrupts();
+    void pauseInterrupts();
+
+private:
+    // ==== InternalFlags ====
+    volatile bool sleepMode     = false;
+    
+    volatile bool leftPoke      = false;
+    volatile bool rightPoke     = false;
+    volatile bool pelletDropped = false;
+    
+    bool jamError               = false;
+    bool sdError                = false;
+
+    // Timing
+    volatile bool leftPokeStarted = false;
+    volatile bool rightPokeStarted = false;
+    volatile unsigned long startLftPoke = 0;
+    volatile unsigned long startRgtPoke = 0;
+    volatile unsigned long dtLftPoke = 0;
+    volatile unsigned long dtRgtPoke = 0;
+
+    
+    // ==== Internal State ====
+    int reward;
+
+    // Log Memory
+    size_t logBufferPos = 0;
+    char logBuffer[FILE_RAM_BUFF_SIZE];
+    unsigned long lastFlush = 0;
+    void writeToLog(char row[ROW_MAX_LEN], bool forceFlush=false);
+    void flushToSD();
+
+
+    // ==== Interrupts ====
     void leftPokeHandler();
     void rightPokeHandler();
     void alarmHandler();
     void wellHandler();
 
-    Adafruit_SharpMem display = Adafruit_SharpMem(SHRP_SCK_PIN, SHRP_MOSI_PIN, SHRP_CS_PIN,  DISPLAY_H, DISPLAY_W);
-    Stepper stepper = Stepper(STEPS, MTR_1_PIN, MTR_2_PIN, MTR_3_PIN, MTR_4_PIN); 
-    RTC_PCF8523 rtc;
-    RTCZero rtcZero;
-    Adafruit_NeoPixel strip = Adafruit_NeoPixel(10, NEOPXL_PIN, NEO_GRBW + NEO_KHZ800);
-
-private:
-    char logBuffer[FILE_RAM_BUFF_SIZE];
-    size_t logBufferPos = 0;
-    unsigned long lastFlush = 0;
-    void writeToLog(char row[ROW_MAX_LEN], bool forceFlush=false);
-    void flushToSD();
-
+    // Static Interrupt Service Routines
     static void leftPokeIRS();
     static void rightPokeIRS();
     static void wellISR();
     static void alarmISR();
+
+    // SD File CallBack
     static void dateTime(uint16_t* date, uint16_t* time);
 };
 
