@@ -34,7 +34,7 @@
 #define BNC_OUT_PIN     A0
 #define SHRP_SCK_PIN    12
 #define SHRP_MOSI_PIN   11
-#define SHRP_SS_PIN     10
+#define SHRP_CS_PIN     10
 #define MTR_EN_PIN      13
 #define MTR_1_PIN       A2
 #define MTR_2_PIN       A3
@@ -56,6 +56,10 @@
 #define DISPLAY_W 168
 #define BLACK 0
 #define WHITE 1
+
+#define ROW_MAX_LEN        500
+#define FILE_RAM_BUFF_SIZE 1024
+#define FILE_PREALLOC_SIZE 25 * 1024UL * 1024UL
 
 #define STEPS 2048
 
@@ -93,6 +97,7 @@ private:
     long lastStatsUpdate= 0;
     long lastStatusUpdate = 0;
 
+    bool jamError = false;
 public:
     FED4();
     static FED4* instance;
@@ -135,7 +140,7 @@ public:
     void begin();
     void run();
     void reset();
-    void showError(String str);
+    void logError(String str);
 
     void loadConfig();
     void saveConfig();
@@ -159,7 +164,7 @@ public:
     void rotateWheel(int degrees);
     
     SdFat sd;
-    String logFileName;
+    SdFile logFile;
     void initSD();
     void showSdError();
     void initLogFile();
@@ -190,13 +195,19 @@ public:
     void alarmHandler();
     void wellHandler();
 
-    Adafruit_SharpMem display = Adafruit_SharpMem(SHRP_SCK_PIN, SHRP_MOSI_PIN, SHRP_SS_PIN,  DISPLAY_H, DISPLAY_W);
+    Adafruit_SharpMem display = Adafruit_SharpMem(SHRP_SCK_PIN, SHRP_MOSI_PIN, SHRP_CS_PIN,  DISPLAY_H, DISPLAY_W);
     Stepper stepper = Stepper(STEPS, MTR_1_PIN, MTR_2_PIN, MTR_3_PIN, MTR_4_PIN); 
     RTC_PCF8523 rtc;
     RTCZero rtcZero;
     Adafruit_NeoPixel strip = Adafruit_NeoPixel(10, NEOPXL_PIN, NEO_GRBW + NEO_KHZ800);
 
 private:
+    char logBuffer[FILE_RAM_BUFF_SIZE];
+    size_t logBufferPos = 0;
+    unsigned long lastFlush = 0;
+    void writeToLog(char row[ROW_MAX_LEN], bool forceFlush=false);
+    void flushToSD();
+
     static void leftPokeIRS();
     static void rightPokeIRS();
     static void wellISR();

@@ -68,12 +68,13 @@ void FED4::begin()
     display.refresh();
 
     digitalWrite(MTR_EN_PIN, HIGH);
-    delay(2);
+    unsigned long startT = millis();
+    while(millis() - startT > 2);
     strip.begin();
     strip.clear();
     strip.show();
 
-    logFileName.reserve(20);
+    // logFileName.reserve(20);
     
     SdFile::dateTimeCallback(dateTime);
     initSD();
@@ -277,7 +278,8 @@ void FED4::setCue() {
     detachInterrupts();
     if (checkFeedingWindow()) {
         digitalWrite(MTR_EN_PIN, HIGH);
-        delay(2);
+        unsigned long startT = millis();
+        while(millis() - startT > 2);
 
         if (activeSensor == BOTH) {
             strip.setPixelColor(8, 5, 2, 0, 0);
@@ -294,7 +296,8 @@ void FED4::setCue() {
         strip.show();
     } else {
         digitalWrite(MTR_EN_PIN, HIGH);
-        delay(2);
+        unsigned long startT = millis();
+        while(millis() - startT > 2);
         strip.clear();
         strip.show();
         digitalWrite(MTR_EN_PIN, LOW);
@@ -350,9 +353,9 @@ void FED4::reset()
     if (entryPoint) entryPoint();
 }
 
-void FED4::showError(String str) {
+void FED4::logError(String str) {
 #ifdef DEB
-    function = "showError";
+    function = "logError";
 #endif
 
     char errorMsg[100] = "";
@@ -362,22 +365,6 @@ void FED4::showError(String str) {
         .event = (const char *)errorMsg
     };
     logEvent(event);
-
-    display.clearDisplay();
-    display.setTextSize(2);
-    display.setTextColor(BLACK);
-    display.setCursor(30, 40);
-    display.println("Error:");
-    display.print(str);
-    display.print("!");
-    display.refresh();
-
-    detachInterrupts();
-    __WFI();
-
-    while(true) {
-        delay(1);
-    }
 }
 
 void FED4::loadConfig() {
@@ -471,8 +458,6 @@ void FED4::attachInterrupts() {
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(LFT_POKE_PIN));
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(RGT_POKE_PIN));
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(WELL_PIN));
-    // attachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN), leftPokeIRS, CHANGE);
-    // attachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN), rightPokeIRS, CHANGE);
     attachInterrupt(digitalPinToInterrupt(WELL_PIN), wellISR, FALLING);
     rtcZero.attachInterrupt(alarmISR);
     __DSB();
@@ -485,9 +470,6 @@ void FED4::detachInterrupts() {
     function = "detachInterrupts";
 #endif
     noInterrupts();
-    // detachInterrupt(digitalPinToInterrupt(LFT_POKE_PIN));
-    // detachInterrupt(digitalPinToInterrupt(RGT_POKE_PIN));
-    // detachInterrupt(digitalPinToInterrupt(WELL_PIN));
     rtcZero.detachInterrupt();
 }
 
@@ -658,6 +640,7 @@ void FED4::alarmHandler() {
         }
 
         updateDisplay(true);
+        flushToSD();
 
         uint8_t alarmSeconds = rtcZero.getSeconds() + LP_DISPLAY_REFRESH_RATE - 1;
         uint8_t alarmMinutes = rtcZero.getMinutes() + (alarmSeconds / 60);
@@ -666,6 +649,8 @@ void FED4::alarmHandler() {
         alarmMinutes = alarmMinutes % 60;
         alarmHours = alarmHours % 24;
         rtcZero.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
+
+        attachInterrupts();
     }
 }
 
@@ -674,6 +659,7 @@ void FED4::feed(int pellets, bool wait)
 #ifdef DEB
     function = "feed";
 #endif
+    if (jamError) return;
 
     pelletDropped = false;
 
@@ -698,7 +684,10 @@ void FED4::feed(int pellets, bool wait)
                 rotateWheel(15);
             }
             else {
-                showError("Clogged or No Pellets");
+                logError("Clogged or No Pellets");
+                jamError = true;
+                updateDisplay();
+                return;
             }
         }
         pelletsDispensed++;
@@ -707,7 +696,8 @@ void FED4::feed(int pellets, bool wait)
             .event = EVENT_PEL
         };
         logEvent(event);
-        delay(200);
+        unsigned long startT = millis();
+        while(millis() - startT > 200);
     }
 
     leftPoke = false;
@@ -739,7 +729,8 @@ void FED4::makeNoise(int duration)
     for (int i = 0; i < duration / 50; i++)
     {
         tone(BUZZER_PIN, random(50, 250), 50);
-        delay(duration / 50);
+        unsigned long startT = millis();
+        while(millis() - startT > duration/50);
     }
 }
 
@@ -785,6 +776,7 @@ void FED4::showSdError()
     display.setCursor(10, 60);
     display.println("  SD Card!");
     display.refresh();
+
     delay(1000);
     display.clearDisplay();
     display.refresh();
@@ -827,7 +819,9 @@ void FED4::initLogFile()
         fileName[16] = '0' + fileIndex % 10;
     }
     
-    File logFile = sd.open(fileName, FILE_WRITE);
+    logFile.open(fileName, FILE_WRITE);
+    logFile.createContiguous(fileName, FILE_PREALLOC_SIZE);
+    logFile.rewind();
 
 #ifdef DEB
     logFile.print("TimeStamp,Battery,Device Number,Function,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
@@ -840,10 +834,48 @@ void FED4::initLogFile()
     if (mode == MODE_FR)
     logFile.print(",Ratio");
     logFile.print("\n");
-    
+
     logFile.flush();
+}
+void FED4::flushToSD() {
+    detachInterrupts();
+
+    if (logBufferPos == 0) {
+        return;
+    }
+
+    digitalWrite(CARD_SEL_PIN, LOW);
+    digitalWrite(SHRP_CS_PIN, HIGH);
+
+    logFile.write(logBuffer, logBufferPos);
+    logBufferPos = 0;
+
+    logFile.truncate();
+    char logFileName[30];
+    logFile.getName(logFileName, 30);
     logFile.close();
-    logFileName = fileName;
+    logFile.open(logFileName, FILE_WRITE);
+
+    attachInterrupts();
+}
+
+void FED4::writeToLog(char row[ROW_MAX_LEN], bool forceFlush) {
+    detachInterrupts();
+
+    int rowLen = strlen(row);
+    if(logBufferPos + rowLen >= FILE_RAM_BUFF_SIZE) {
+        flushToSD();
+        lastFlush = millis();
+        return;
+    }
+    memcpy(&logBuffer[logBufferPos], row, rowLen);
+    logBufferPos += rowLen;
+
+    if ( (millis() - lastFlush > 50 * 1000) || forceFlush) {
+        flushToSD();
+    }
+
+    attachInterrupts();
 }
 
 void FED4::logEvent(Event e)
@@ -852,9 +884,7 @@ void FED4::logEvent(Event e)
     function = "logEvent";
 #endif
 
-    detachInterrupts();
-
-    char row[500] = "";
+    char row[ROW_MAX_LEN] = "";
     DateTime now = getDateTime();
     
     char date[20];
@@ -958,13 +988,7 @@ void FED4::logEvent(Event e)
     
     strcat(row, "\n");
     
-
-    File logFile = sd.open(logFileName, FILE_WRITE);
-    logFile.print(row);
-    logFile.flush();
-    logFile.close();
-
-    attachInterrupts();
+    writeToLog(row);
 }
 
 void FED4::deleteLines(int n)
@@ -972,35 +996,33 @@ void FED4::deleteLines(int n)
 #ifdef DEB
     function = "deleteLines";
 #endif
-
-    File logFile = sd.open(logFileName, O_RDWR);
     
-    int newLineCount = 0;
-    uint lastNewLinePos = 0;
-    uint fileSize = logFile.size();
+    // int newLineCount = 0;
+    // uint lastNewLinePos = 0;
+    // uint fileSize = logFile.size();
 
-    for (uint i = fileSize - 1; i >= 0; i--)
-    {
-        logFile.seek(i);
-        if (logFile.read() == '\n')
-        {
-            newLineCount++;
-            if (newLineCount == n + 1)
-            {
-                lastNewLinePos = i + 1;
-                break;
-            }
-        }
-    }
+    // for (uint i = fileSize - 1; i >= 0; i--)
+    // {
+    //     logFile.seek(i);
+    //     if (logFile.read() == '\n')
+    //     {
+    //         newLineCount++;
+    //         if (newLineCount == n + 1)
+    //         {
+    //             lastNewLinePos = i + 1;
+    //             break;
+    //         }
+    //     }
+    // }
 
-    if (newLineCount <= n)
-    {
-        lastNewLinePos = 0;
-    }
+    // if (newLineCount <= n)
+    // {
+    //     lastNewLinePos = 0;
+    // }
 
-    logFile.truncate(lastNewLinePos);
-    logFile.flush();
-    logFile.close();
+    // logFile.truncate(lastNewLinePos);
+    // logFile.flush();
+    // logFile.close();
 
     return;
 }
@@ -1140,6 +1162,8 @@ void FED4::displayLayout()
     else if (mode == MODE_VI)
         display.print("Variable Interval");
     display.setCursor(4, 134);
+    char logFileName[30];
+    logFile.getName(logFileName, 30);
     display.print(logFileName);
 
     updateDisplay(true);
@@ -1152,6 +1176,8 @@ void FED4::updateDisplay(bool statusOnly)
 #endif
 
     detachInterrupts();
+    digitalWrite(SHRP_CS_PIN, LOW);
+    digitalWrite(CARD_SEL_PIN, HIGH);
     
     if (!statusOnly) {
         drawStats();
@@ -1159,6 +1185,10 @@ void FED4::updateDisplay(bool statusOnly)
     
     drawDateTime();
     drawBateryCharge();
+
+    if (jamError) {
+        print("ERROR: JAM OR NO PELLETS");
+    }
 
     display.refresh();
 
@@ -1283,7 +1313,10 @@ int FED4::getBatteryPercentage()
     function = "getBatteryPercentage";
 #endif
 
+    detachInterrupts();
     float batteryVoltage = analogRead(VBAT_PIN);
+    attachInterrupts();
+
     batteryVoltage *= 2;
     batteryVoltage *= 3.3;
     batteryVoltage /= 1024;
