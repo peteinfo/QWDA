@@ -968,19 +968,19 @@ void FED4::updateDisplay(bool statusOnly) {
 void FED4::runConfigMenu() {
     ignorePokes = true;
 
-    Menu *modeMenu = initMenu(9);
+    Menu *modeMenu = new Menu(9);
 
-    Menu *clockMenu = initClockMenu(modeMenu);
-    modeMenu->items[0] = initItem((char *)"Time", clockMenu);
+    Menu *clockMenu = new ClockMenu(modeMenu);
 
-    modeMenu->items[1] = initItem((char *)"Dev no", (int*)&deviceNumber, 0, 99, 1);
+    modeMenu->items[0] = new MenuItem((char *)"Time", clockMenu);
+    modeMenu->items[1] = new MenuItem((char *)"Dev no", (int*)&deviceNumber, 0, 99, 1);
 
     const char *modes[] = {"FR", "VI", "%"};
-    modeMenu->items[2] = initItem((char *)"Mode", modes, 3);
+    modeMenu->items[2] = new MenuItem((char *)"Mode", modes, 3);
     modeMenu->items[2]->valueIdx = mode;
 
     const char *sensors[] = {"L&R", "L", "R"};
-    modeMenu->items[3] = initItem((char *)"Sensor", sensors, 3);
+    modeMenu->items[3] = new MenuItem((char *)"Sensor", sensors, 3);
     if (activeSensor == ActiveSensor::BOTH) {
         modeMenu->items[3]->valueIdx = 0;
     }
@@ -991,12 +991,12 @@ void FED4::runConfigMenu() {
         modeMenu->items[3]->valueIdx = 2;
     }
 
-    modeMenu->items[4] = initItem((char *)"L Rew", (int*)&leftReward, 0, 255, 1);
-    modeMenu->items[5] = initItem((char *)"R Rew", (int*)&rightReward, 0, 255, 1);
+    modeMenu->items[4] = new MenuItem((char *)"L Rew", (int*)&leftReward, 0, 255, 1);
+    modeMenu->items[5] = new MenuItem((char *)"R Rew", (int*)&rightReward, 0, 255, 1);
 
-    modeMenu->items[6] = initItem((char*)"Rew Win", &feedWindow);
-    modeMenu->items[7] = initItem((char*)"Rew Beg", (int*)&windowStart, 0, 23, 1);
-    modeMenu->items[8] = initItem((char*)"Rew End", (int*)&windowEnd, 0, 23, 1);
+    modeMenu->items[6] = new MenuItem((char*)"Rew Win", &feedWindow);
+    modeMenu->items[7] = new MenuItem((char*)"Rew Beg", (int*)&windowStart, 0, 23, 1);
+    modeMenu->items[8] = new MenuItem((char*)"Rew End", (int*)&windowEnd, 0, 23, 1);
 
     int batteryLevel = getBatteryPercentage();
     runMenu(modeMenu, batteryLevel);
@@ -1019,18 +1019,17 @@ void FED4::runConfigMenu() {
         mode = Mode::OTHER;
     }
 
-    // freeMenu(modeMenu);
-    // delete(modeMenu);
+    delete(modeMenu);
     ignorePokes = false;
 }
 
 void FED4::runViMenu() {
     ignorePokes = true;
 
-    Menu *menu = initMenu(2);
+    Menu *menu = new Menu(2);
 
-    menu->items[0] = initItem((char*)"Avg T", (int*)&viAvg, 0, 120, 5);
-    menu->items[1] = initItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
+    menu->items[0] = new MenuItem((char*)"Avg T", (int*)&viAvg, 0, 120, 5);
+    menu->items[1] = new MenuItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
 
     runMenu(menu);
     
@@ -1041,26 +1040,26 @@ void FED4::runViMenu() {
 void FED4::runFrMenu() {
     ignorePokes = true;
 
-    Menu *menu = initMenu(1);
+    Menu *menu = new Menu(1);
 
-    menu->items[0] = initItem((char*)"Ratio", (int*)&ratio, 1, 10, 1);
+    menu->items[0] = new MenuItem((char*)"Ratio", (int*)&ratio, 1, 10, 1);
 
     runMenu(menu);
 
-    // delete(menu);
+    delete(menu);
     ignorePokes = false;
 }
 
 void FED4::runChanceMenu() {
     ignorePokes = true;
 
-    Menu *menu = initMenu(1);
+    Menu *menu = new Menu(1);
 
-    menu->items[0] = initItem((char*)"Chance", &chance, 0.0, 1.0, 0.1);
+    menu->items[0] = new MenuItem((char*)"Chance", &chance, 0.0, 1.0, 0.1);
 
     runMenu(menu);
 
-    // delete(menu);
+    delete(menu);
     ignorePokes = false;
 }
 

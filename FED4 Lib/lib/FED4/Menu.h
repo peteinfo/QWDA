@@ -39,6 +39,13 @@ typedef struct MenuItem MenuItem;
 typedef struct Menu Menu;
 
 typedef struct MenuItem {
+  MenuItem(char* name, int* value, int min, int max, int step);
+  MenuItem(char* name, float* value, float min, float max, float step);
+  MenuItem(char* name, bool* value);
+  MenuItem(char *name, const char** list, int listLen);
+  MenuItem(char *name, Menu *submenu);
+  ~MenuItem();
+
   const char *name;
   ItemType type;
 
@@ -54,13 +61,12 @@ typedef struct MenuItem {
 
   Menu *submenu;
 
-  ~MenuItem();
 } MenuItem;
-MenuItem* initItem(char* name, int* value, int min, int max, int step);
-MenuItem* initItem(char* name, float* value, float min, float max, float step);
-MenuItem* initItem(char* name, bool* value);
-MenuItem* initItem(char *name, const char** list, int listLen);
-MenuItem* initItem(char *name, Menu *submenu);
+// MenuItem* initItem(char* name, int* value, int min, int max, int step);
+// MenuItem* initItem(char* name, float* value, float min, float max, float step);
+// MenuItem* initItem(char* name, bool* value);
+// MenuItem* initItem(char *name, const char** list, int listLen);
+// MenuItem* initItem(char *name, Menu *submenu);
 // void freeMenuItem(MenuItem *item);
 const char** initList(int listLen);
 void increaseInt(MenuItem *item);
@@ -73,21 +79,27 @@ void previousList(MenuItem *item);
 
 
 typedef struct Menu {
+  Menu(int itemNo);
+  Menu(Menu *parent, int itemNo);
+  ~Menu();
+
   Menu *parent;
   MenuType type;
   MenuItem **items;
   int itemNo;
   MenuItem *selectedItem;
   int selectedIdx;
-
-  ~Menu();
 } Menu;
-Menu* initMenu(int itemNo);
-Menu* initMenu(Menu *parent, int itemNo);
-Menu* initClockMenu(Menu *parent);
+// Menu* initMenu(int itemNo);
+// Menu* initMenu(Menu *parent, int itemNo);
+// Menu* initClockMenu(Menu *parent);
 // void freeMenu(Menu *menu);
 void handleRightBtn(Menu *item);
 void handleLeftBtn(Menu *item);
 void runMenu(Menu *menu, int batteryLevel = -1);
+
+struct ClockMenu : Menu {
+  ClockMenu(Menu *parent);
+};
 
 #endif
