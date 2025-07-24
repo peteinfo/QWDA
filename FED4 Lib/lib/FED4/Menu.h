@@ -8,59 +8,58 @@
 extern Adafruit_SharpMem *menu_display;
 extern RTC_PCF8523 *menu_rtc;
 
-#define BLACK 0
-#define WHITE 1
+constexpr uint8_t BLACK = 0;
+constexpr uint8_t WHITE = 1;
 
-#define LEFT_POKE 6
-#define RIGHT_POKE 5
+constexpr uint8_t LEFT_POKE   = 6;
+constexpr uint8_t RIGHT_POKE  = 5;
 
-#define COL_1_X     10
-#define COL_2_X     100
-#define START_Y     15
-#define ROW_HEIGHT  20
+constexpr uint8_t COL_1_X     = 10;
+constexpr uint8_t COL_2_X     = 100;
+constexpr uint8_t START_Y     = 15;
+constexpr uint8_t ROW_HEIGHT  = 20;
 
-#define SEL_DONE    -1
-#define SEL_BACK    -2
+constexpr int8_t SEL_DONE = -1;
+constexpr int8_t SEL_BACK = -2;
 
 typedef enum {
-  ITEM_T_INT,
-  ITEM_T_FLOAT,
-  ITEM_T_BOOL,
-  ITEM_T_LIST,
-  ITEM_T_SUBMENU
+    ITEM_T_INT,
+    ITEM_T_FLOAT,
+    ITEM_T_BOOL,
+    ITEM_T_LIST,
+    ITEM_T_SUBMENU
 } ItemType;
 
 typedef enum {
-  MENU_T_LIST,
-  MENU_T_CLOCK
+    MENU_T_LIST,
+    MENU_T_CLOCK
 } MenuType;
 
 typedef struct MenuItem MenuItem;
 typedef struct Menu Menu;
 
 typedef struct MenuItem {
-  MenuItem(char* name, int* value, int min, int max, int step);
-  MenuItem(char* name, float* value, float min, float max, float step);
-  MenuItem(char* name, bool* value);
-  MenuItem(char *name, const char** list, int listLen);
-  MenuItem(char *name, Menu *submenu);
-  ~MenuItem();
+    MenuItem(char* name, int* value, int min, int max, int step);
+    MenuItem(char* name, float* value, float min, float max, float step);
+    MenuItem(char* name, bool* value);
+    MenuItem(char *name, const char** list, int listLen);
+    MenuItem(char *name, Menu *submenu);
+    ~MenuItem();
 
-  const char *name;
-  ItemType type;
+    const char *name;
+    ItemType type;
 
-  void *value;
+    void *value;
 
-  void *minValue;
-  void *maxValue;
-  void *step;
+    void *minValue;
+    void *maxValue;
+    void *step;
 
-  int valueIdx;
-  const char **list;
-  int listLen;
+    int valueIdx;
+    const char **list;
+    int listLen;
 
-  Menu *submenu;
-
+    Menu *submenu;
 } MenuItem;
 // MenuItem* initItem(char* name, int* value, int min, int max, int step);
 // MenuItem* initItem(char* name, float* value, float min, float max, float step);
@@ -79,16 +78,16 @@ void previousList(MenuItem *item);
 
 
 typedef struct Menu {
-  Menu(int itemNo);
-  Menu(Menu *parent, int itemNo);
-  ~Menu();
+    Menu(int itemNo);
+    Menu(Menu *parent, int itemNo);
+    ~Menu();
 
-  Menu *parent;
-  MenuType type;
-  MenuItem **items;
-  int itemNo;
-  MenuItem *selectedItem;
-  int selectedIdx;
+    Menu *parent;
+    MenuType type;
+    MenuItem **items;
+    int itemNo;
+    MenuItem *selectedItem;
+    int selectedIdx;
 } Menu;
 // Menu* initMenu(int itemNo);
 // Menu* initMenu(Menu *parent, int itemNo);
@@ -99,7 +98,7 @@ void handleLeftBtn(Menu *item);
 void runMenu(Menu *menu, int batteryLevel = -1);
 
 struct ClockMenu : Menu {
-  ClockMenu(Menu *parent);
+    ClockMenu(Menu *parent);
 };
 
 #endif

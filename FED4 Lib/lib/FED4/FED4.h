@@ -61,7 +61,7 @@ namespace ActiveSensor {
 };
  
 
-namespace EventID {
+namespace EventMsg {
     constexpr const  char* LEFT     = "Left Poke";
     constexpr const  char* RIGHT    = "Right Poke";
     constexpr const  char* PEL      = "Dropped Pellet";
@@ -73,7 +73,7 @@ namespace EventID {
 
 struct Event {
     DateTime time;
-    const char* event;
+    const char* message;
 };
 
 namespace ErrorMsg {

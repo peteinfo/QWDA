@@ -153,76 +153,103 @@ bool FED4::checkCondition() {
         return false;
     }
 
-    if (mode == Mode::FR) {
-        return checkFRCondition();
+    bool conditionMet;
+    switch (mode) {
+    case Mode::FR:
+        conditionMet = checkFRCondition();
+        break;
+
+    case Mode::VI:
+        conditionMet = checkVICondition();
+        break;
+    
+    case Mode::CHANCE:
+        conditionMet = checkChanceCondition();
+        break;
+    
+    default:
+        if(checkChanceCondition == nullptr) {
+            conditionMet = false;
+        }
+        else {
+            conditionMet = checkOtherCondition();
+        }
+        break;  
     }
-    if (mode == Mode::VI) {
-        return checkVICondition();
-    }
-    if (mode == Mode::CHANCE) {
-        return checkChanceCondition();
-    }
-    if (mode == Mode::OTHER) {
-        return checkChanceCondition();
-    }
-    return false;
+
+    return conditionMet;
 }
 
 bool FED4::checkFRCondition() {
-    if (
-        activeSensor == ActiveSensor::BOTH
-         && (leftPokeCount + rightPokeCount) % ratio == 0 
-    ) {
-         if ( getLeftPoke() ) {
+    bool conditionMet = false;
+    switch (activeSensor) {
+    case ActiveSensor::BOTH:
+        if ( (leftPokeCount + rightPokeCount) % ratio == 0 ) {
+            if (getLeftPoke()) {
+                reward = leftReward;
+                conditionMet = true;
+            }
+            if (getRightPoke()) {
+                reward = rightReward;
+                conditionMet = true;
+            }
+        }
+        break;
+
+    case ActiveSensor::LEFT:
+        if (getLeftPoke() && leftPokeCount % ratio == 0) {
             reward = leftReward;
-            return true;
+            conditionMet = true;
         }
-        if ( getRightPoke() ) { 
-            reward = rightReward;
-            return true;
+        break;
+
+    case ActiveSensor::RIGHT:
+        if(getRightPoke() && rightPokeCount %ratio == 0) {
+            reward = rightPoke;
+            conditionMet = true;
         }
+        break;
     }
-
-    else if (
-        activeSensor == ActiveSensor::LEFT
-        && getLeftPoke()
-        && leftPokeCount % ratio == 0
-    ) {
-        reward = leftReward;
-        return true;
-    }
-
-    else if (
-            activeSensor == ActiveSensor::RIGHT
-            && getRightPoke()
-            && rightPokeCount % ratio == 0
-    ) {
-        reward = rightReward;
-        return true;
-    }
-
-    return false;
+    
+    return conditionMet;
 }
 
 bool FED4::checkVICondition() {
     if (viSet) {
-            if (viCountDown <=0) {
-                viSet = false;
-                viCountDown = 0;
-                return true;
-            }
-            else {
-                viCountDown  = (int)(feedUnixT - getDateTime().unixtime());
-            }
+        if (viCountDown <= 0) {
+            viSet = false;
+            viCountDown = 0;
+            return true;
+        }
+        else {
+            viCountDown  = (int)(feedUnixT - getDateTime().unixtime());
+        }
     }
     else {
         bool pokedLeft = getLeftPoke();
         bool pokedRight = getRightPoke();
 
-        if (
-            ( pokedLeft && ( activeSensor == ActiveSensor::LEFT || activeSensor == ActiveSensor::BOTH ) )
-            || ( pokedRight && ( activeSensor == ActiveSensor::RIGHT || activeSensor == ActiveSensor::BOTH) )
-        ) {
+        bool conditionMet = false;
+        switch (activeSensor) {
+        case ActiveSensor::BOTH:
+            if (pokedLeft || pokedRight) {
+                conditionMet = true;
+            }
+            break;
+        
+        case ActiveSensor::LEFT:
+            if (pokedLeft) {
+                conditionMet = true;
+            }
+            break;
+
+        case ActiveSensor::RIGHT:
+            if (pokedRight) {
+                conditionMet = true;
+            }
+        }
+
+        if (conditionMet) {
             viCountDown = getViCountDown();
             viSet = true;
 
@@ -230,14 +257,14 @@ bool FED4::checkVICondition() {
                 reward = leftReward;
             }
             else if (pokedRight) {
-                reward = rightReward;
+                reward = rightPoke;
             }
 
             Event e = Event {
-                        .time = getDateTime(),
-                        .event = EventID::SET_VI
-                    };
-                    logEvent(e);
+                .time = getDateTime(),
+                .message = EventMsg::SET_VI
+            };
+            logEvent(e);
 
             feedUnixT = getDateTime().unixtime() + viCountDown;
         }
@@ -274,18 +301,23 @@ void FED4::setLightCue() {
         digitalWrite(FED4Pins::MTR_EN, HIGH);
         __delay(2);
 
-        if (activeSensor == ActiveSensor::BOTH) {
+        switch (activeSensor) {
+        case ActiveSensor::BOTH:
             strip.setPixelColor(8, 5, 2, 0, 0);
             strip.setPixelColor(9, 5, 2, 0, 0);
             strip.setPixelColor(0, 0, 0, 0);
-        }
-        if (activeSensor == ActiveSensor::LEFT) {
+            break;
+        
+        case ActiveSensor::LEFT:
             strip.setPixelColor(9, 5, 2, 0, 0);
             strip.setPixelColor(0,0,0,0);
-        }
-        if (activeSensor == ActiveSensor::RIGHT) {
+            break;
+
+        case ActiveSensor::RIGHT:
             strip.setPixelColor(8, 5, 2, 0, 0);
+            break;
         }
+
         strip.show();
     } else {
         digitalWrite(FED4Pins::MTR_EN, HIGH);
@@ -303,7 +335,7 @@ void FED4::logError(String str) {
     snprintf(errorMsg, sizeof(errorMsg), "Error: %s", str.c_str());
     Event event = {
         .time = getDateTime(),
-        .event = (const char *)errorMsg
+        .message = (const char *)errorMsg
     };
     logEvent(event);
 }
@@ -357,24 +389,37 @@ void FED4::saveConfig() {
 
     config["device number"] = 0;
 
-    if (mode == Mode::FR) {
+    switch (mode) {
+    case Mode::FR:
         config["mode"]["name"] = "FR";
         config["mode"]["ratio"] = ratio;
-    } else if (mode == Mode::VI) {
+        break;
+
+    case Mode::VI:
         config["mode"]["name"] = "VI";
         config["mode"]["avg"] = viAvg;
         config["mode"]["spread"] = viSpread;
-    } else if (mode == Mode::CHANCE) {
+        break;
+
+    case Mode::CHANCE:
         config["mode"]["name"] = "CHANCE";
         config["mode"]["chance"] = chance;
+    
+    default:
+        break;
     }
 
-    if (activeSensor == ActiveSensor::LEFT) {
+    switch (activeSensor) {
+    case ActiveSensor::LEFT:
         config["active sensor"] = "left";
-    } else if (activeSensor == ActiveSensor::RIGHT) {
+        break;
+
+    case ActiveSensor::RIGHT:
         config["active sensor"] = "right";
-    } else if (activeSensor == ActiveSensor::BOTH) {
-        config["active sensor"] = "both";
+        break;
+
+    default:
+        break;
     }
 
     config["reward"]["left"] = leftReward;
@@ -471,7 +516,7 @@ void FED4::leftPokeHandler() {
         leftPokeCount++;
         Event event = {
             .time = getDateTime(),
-            .event = EventID::LEFT
+            .message = EventMsg::LEFT
         };
         logEvent(event);
         leftPokeStarted = false;
@@ -502,7 +547,7 @@ void FED4::rightPokeHandler() {
         rightPokeCount++;
         Event event = {
             .time = getDateTime(),
-            .event = EventID::RIGHT
+            .message = EventMsg::RIGHT
         };
         logEvent(event);
         rightPokeStarted = false;
@@ -571,7 +616,7 @@ void FED4::feed(int pellets, bool wait) {
         pelletsDispensed++;
         Event event = {
             .time = getDateTime(),
-            .event = EventID::PEL
+            .message = EventMsg::PEL
         };
         logEvent(event);
         __delay(200);
@@ -669,12 +714,35 @@ void FED4::initLogFile() {
     logFile.createContiguous(fileName, FILE_PREALLOC_SIZE);
     logFile.rewind();
 
-    logFile.print("TimeStamp,Battery,Device Number,Mode,Event,Active Sensor,Left Reward,Right Reward,Left Poke Count,Right Poke Count,Pellet Count");
+    logFile.print("TimeStamp,");
+    logFile.print("Battery,");
+    logFile.print("Device Number,");
+    logFile.print("Mode,");
+    logFile.print("Event,");
+    logFile.print("Active Sensor,");
+    logFile.print("Left Reward,");
+    logFile.print("Right Reward,");
+    logFile.print("Left Poke Count,");
+    logFile.print("Right Poke Count,");
+    logFile.print("Pellet Count");
 
-    if (mode == Mode::VI)
-    logFile.print(",VI Count Down");
-    if (mode == Mode::FR)
-    logFile.print(",Ratio");
+    switch (mode) {
+    case Mode::VI:
+        logFile.print(",VI Count Down");
+        break;
+
+    case Mode::FR:
+        logFile.print(",Ratio");
+        break;
+
+    case Mode::CHANCE:
+        logFile.print(",Chance");
+        break;
+    
+    default:
+        break;
+    }
+
     logFile.print("\n");
 
     logFile.flush();
@@ -733,88 +801,116 @@ void FED4::logEvent(Event e) {
     strcat(row, time);
     strcat(row, ",");
 
-    char battery_str[5];
-    sprintf(battery_str, "%d", getBatteryPercentage());
+    char battery_str[8];
+    snprintf(battery_str, sizeof(battery_str), "%d", getBatteryPercentage());
     strcat(row, battery_str);
     strcat(row, ",");
     
-    char deviceNumber_str[5];
-    sprintf(deviceNumber_str, "%d", deviceNumber%100);
+    char deviceNumber_str[8];
+    snprintf(deviceNumber_str, sizeof(deviceNumber_str), "%d", deviceNumber%100);
     strcat(row, deviceNumber_str);
     strcat(row, ",");
 
     char mode_str[10];
-    if (mode == Mode::FR)
+    switch (mode) {
+    case Mode::FR:
         sprintf(mode_str, "FR");
-    else if (mode == Mode::VI)
+        break;
+        
+    case Mode::VI:
         sprintf(mode_str, "VI");
-    else if (mode == Mode::CHANCE) 
+        break;
+        
+    case Mode::CHANCE:
         sprintf(mode_str, "CHANCE");
-    else if (mode == Mode::OTHER)
+        break;
+
+    default :
         sprintf(mode_str, "OTHER");
-    strcat(row, mode_str);
+        break;
+    }
     strcat(row, ",");
 
-    strcat(row, e.event);
+    strcat(row, e.message);
     strcat(row, ",");
 
     char activeSensor_str[10];
-    if (activeSensor == ActiveSensor::LEFT)
-        sprintf(activeSensor_str, "Left");
-    if (activeSensor == ActiveSensor::RIGHT)
-    sprintf(activeSensor_str, "Right");
-    if (activeSensor == ActiveSensor::BOTH)
+    switch (activeSensor) {
+    case ActiveSensor::BOTH:
         sprintf(activeSensor_str, "Both");
+        break;
+    
+    case ActiveSensor::LEFT:
+        sprintf(activeSensor_str, "Left");
+        break;
+    
+    case ActiveSensor::RIGHT:
+        sprintf(activeSensor_str, "Right");
+        break;
+    }
     strcat(row, activeSensor_str);
     strcat(row, ",");
 
     char leftReward_str[5];
-    if (activeSensor == ActiveSensor::LEFT || activeSensor == ActiveSensor::BOTH)
-    sprintf(leftReward_str, "%d", leftReward);
-    else
-        sprintf(leftReward_str, "nan");
     char rightReward_str[5];
-    if (activeSensor == ActiveSensor::RIGHT || activeSensor == ActiveSensor::BOTH)
-        sprintf(rightReward_str, "%d", rightReward);
-    else
-    sprintf(rightReward_str, "nan");
+    switch (activeSensor) {
+    case ActiveSensor::LEFT:
+        snprintf(leftReward_str, sizeof(leftReward_str), "%d", leftReward);
+        snprintf(rightReward_str, sizeof(rightReward_str), "nan");
+        break;
+        
+    case ActiveSensor::RIGHT:
+        snprintf(leftReward_str, sizeof(leftReward_str), "nan");
+        snprintf(rightReward_str, sizeof(rightReward_str), "%d", rightReward);
+        break;
+        
+    case ActiveSensor::BOTH:
+        snprintf(leftReward_str, sizeof(leftReward_str), "%d", leftReward);
+        snprintf(rightReward_str, sizeof(rightReward_str), "%d", rightReward);
+        break;    
+    }
     strcat(row, leftReward_str);
     strcat(row, ",");
     strcat(row, rightReward_str);
     strcat(row, ",");
     
-    char leftPokeCount_str[5];
-    sprintf(leftPokeCount_str, "%d", leftPokeCount);
-    char rightPokeCount_str[5];
-    sprintf(rightPokeCount_str, "%d", rightPokeCount);
+    char leftPokeCount_str[8];
+    snprintf(leftPokeCount_str, sizeof(leftPokeCount_str), "%d", leftPokeCount);
+    char rightPokeCount_str[8];
+    snprintf(rightPokeCount_str, sizeof(rightPokeCount_str), "%d", rightPokeCount);
     strcat(row, leftPokeCount_str);
     strcat(row, ",");
     strcat(row, rightPokeCount_str);
     strcat(row, ",");
     
-    char pelletsDispensed_str[5];
-    sprintf(pelletsDispensed_str, "%d", pelletsDispensed);
+    char pelletsDispensed_str[8];
+    snprintf(pelletsDispensed_str, sizeof(pelletsDispensed_str), "%d", pelletsDispensed);
     strcat(row, pelletsDispensed_str);
     
-    if (mode == Mode::VI)
-    {
+    switch (mode) {
+    case Mode::VI:
         strcat(row, ",");
         char viCountDown_str[10];
         sprintf(viCountDown_str, "%d", viCountDown);
         strcat(row, viCountDown_str);
-    }
-    if (mode == Mode::FR)
-    {
+        break;
+
+    case Mode::FR:
         strcat(row, ",");
         char ratio_str[10];
         sprintf(ratio_str, "%d", ratio);
         strcat(row, ratio_str);
-    }
-    if (mode == Mode::CHANCE) {
+        break;
+
+    case Mode::CHANCE:
         strcat(row, ",");
         char chance_str[8];
         sprintf(chance_str, "%.2f", chance);
         strcat(row, chance_str);
+        break;
+    
+    default:
+        break;
     }
     
     strcat(row, "\n");
@@ -979,17 +1075,9 @@ void FED4::runConfigMenu() {
     modeMenu->items[2] = new MenuItem((char *)"Mode", modes, 3);
     modeMenu->items[2]->valueIdx = mode;
 
-    const char *sensors[] = {"L&R", "L", "R"};
+    const char *sensors[] = {"L", "R", "L&R"};
     modeMenu->items[3] = new MenuItem((char *)"Sensor", sensors, 3);
-    if (activeSensor == ActiveSensor::BOTH) {
-        modeMenu->items[3]->valueIdx = 0;
-    }
-    else if (activeSensor == ActiveSensor::LEFT) {
-        modeMenu->items[3]->valueIdx = 1;
-    }
-    else {
-        modeMenu->items[3]->valueIdx = 2;
-    }
+    modeMenu->items[3]->valueIdx = activeSensor;
 
     modeMenu->items[4] = new MenuItem((char *)"L Rew", (int*)&leftReward, 0, 255, 1);
     modeMenu->items[5] = new MenuItem((char *)"R Rew", (int*)&rightReward, 0, 255, 1);
@@ -1001,18 +1089,7 @@ void FED4::runConfigMenu() {
     int batteryLevel = getBatteryPercentage();
     runMenu(modeMenu, batteryLevel);
 
-    if (modeMenu->items[3]->valueIdx == 0)
-    {
-        activeSensor = ActiveSensor::BOTH;
-    }
-    else if (modeMenu->items[3]->valueIdx == 1)
-    {
-        activeSensor = ActiveSensor::LEFT;
-    }
-    else
-    {
-        activeSensor = ActiveSensor::RIGHT;
-    }
+    activeSensor = modeMenu->items[3]->valueIdx;
 
     mode = modeMenu->items[2]->valueIdx;
     if(mode > 2) {

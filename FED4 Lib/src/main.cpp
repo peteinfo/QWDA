@@ -13,7 +13,7 @@ void setup() {
     lastLogTime = fed4.getDateTime().unixtime();
     Event event = {
         .time = fed4.getDateTime(),
-        .event = "Bat Log"
+        .message = "Bat Log"
     };
 }
 
