@@ -187,46 +187,46 @@ class FED4 {
 
 private:
     // ==== InternalFlags ====
-    volatile bool sleepMode     = false;
+    volatile bool _sleep_mode     = false;
     
-    volatile bool leftPoke      = false;
-    volatile bool rightPoke     = false;
-    volatile bool pelletDropped = false;
+    volatile bool _left_poke      = false;
+    volatile bool _right_poke     = false;
+    volatile bool _pellet_dropped = false;
     
-    bool jamError               = false;
-    bool sdError                = false;
+    bool _jam_error               = false;
+    bool _sd_error                = false;
 
     // Timing
-    volatile bool leftPokeStarted = false;
-    volatile bool rightPokeStarted = false;
-    volatile unsigned long startLftPoke = 0;
-    volatile unsigned long startRgtPoke = 0;
-    volatile unsigned long dtLftPoke = 0;
-    volatile unsigned long dtRgtPoke = 0;
+    volatile bool _left_poke_started      = false;
+    volatile bool _right_poke_started     = false;
+    volatile unsigned long _startT_left_poke     = 0;
+    volatile unsigned long _startT_right_poke    = 0;
+    volatile unsigned long _dT_left_poke         = 0;
+    volatile unsigned long _dT_right_poke        = 0;
 
     
     // ==== Internal State ====
-    int reward;
+    int _reward;
 
     // Log Memory
-    size_t logBufferPos = 0;
-    char logBuffer[FILE_RAM_BUFF_SIZE];
-    unsigned long lastFlush = 0;
-    void writeToLog(char row[ROW_MAX_LEN], bool forceFlush=false);
-    void flushToSD();
+    size_t _log_buffer_pos = 0;
+    char _log_buffer[FILE_RAM_BUFF_SIZE];
+    unsigned long _last_flush = 0;
+    void write_to_log(char row[ROW_MAX_LEN], bool forceFlush=false);
+    void flush_to_sd();
 
 
     // ==== Interrupts ====
-    void leftPokeHandler();
-    void rightPokeHandler();
-    void alarmHandler();
-    void wellHandler();
+    void left_poke_handler();
+    void right_poke_handler();
+    void alarm_handler();
+    void well_handler();
 
-    // Static Interrupt Service Routines
-    static void leftPokeIRS();
-    static void rightPokeIRS();
-    static void wellISR();
-    static void alarmISR();
+    // Static Interrupt Service Routinesd
+    static void left_poke_IRS();
+    static void right_poke_IRS();
+    static void well_ISR();
+    static void alarm_ISR();
 
     // SD File CallBack
     static void dateTime(uint16_t* date, uint16_t* time);

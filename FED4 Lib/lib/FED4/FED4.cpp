@@ -29,9 +29,9 @@ void FED4::begin() {
     digitalWrite(FED4Pins::WELL, HIGH);
 
     // Interrupts
-    attachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE), leftPokeIRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE), rightPokeIRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), wellISR, FALLING);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE), left_poke_IRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE), right_poke_IRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), well_ISR, FALLING);
 
     // Wakeup sources
     EIC->WAKEUP.reg |= (1 << 4);   // FED4Pins::LFT_POKE
@@ -61,7 +61,7 @@ void FED4::begin() {
         alarmSeconds -= 60;
     }
     rtcZero.setAlarmTime(0, 0, alarmSeconds);
-    rtcZero.attachInterrupt(alarmISR);
+    rtcZero.attachInterrupt(alarm_ISR);
     rtcZero.enableAlarm(RTCZero::MATCH_SS);
 
     randomSeed(rtc.now().unixtime());
@@ -114,7 +114,7 @@ void FED4::run() {
     updateDisplay();    
     
     if (checkCondition()) {
-        feed(reward);
+        feed(_reward);
     }
 
     if (!checkFeedingWindow()) {
@@ -168,7 +168,7 @@ bool FED4::checkCondition() {
         break;
     
     default:
-        if(checkChanceCondition == nullptr) {
+        if(checkOtherCondition == nullptr) {
             conditionMet = false;
         }
         else {
@@ -186,11 +186,11 @@ bool FED4::checkFRCondition() {
     case ActiveSensor::BOTH:
         if ( (leftPokeCount + rightPokeCount) % ratio == 0 ) {
             if (getLeftPoke()) {
-                reward = leftReward;
+                _reward = leftReward;
                 conditionMet = true;
             }
             if (getRightPoke()) {
-                reward = rightReward;
+                _reward = rightReward;
                 conditionMet = true;
             }
         }
@@ -198,14 +198,14 @@ bool FED4::checkFRCondition() {
 
     case ActiveSensor::LEFT:
         if (getLeftPoke() && leftPokeCount % ratio == 0) {
-            reward = leftReward;
+            _reward = leftReward;
             conditionMet = true;
         }
         break;
 
     case ActiveSensor::RIGHT:
         if(getRightPoke() && rightPokeCount %ratio == 0) {
-            reward = rightPoke;
+            _reward = _right_poke;
             conditionMet = true;
         }
         break;
@@ -254,10 +254,10 @@ bool FED4::checkVICondition() {
             viSet = true;
 
             if (pokedLeft) {
-                reward = leftReward;
+                _reward = leftReward;
             }
             else if (pokedRight) {
-                reward = rightPoke;
+                _reward = _right_poke;
             }
 
             Event e = Event {
@@ -280,7 +280,7 @@ bool FED4::checkChanceCondition() {
         && ( activeSensor == ActiveSensor::LEFT || activeSensor == ActiveSensor::BOTH )
         && r <= int(chance * 100)
     ) {
-        reward = leftReward;
+        _reward = leftReward;
         return true;
     }
     else if (
@@ -288,7 +288,7 @@ bool FED4::checkChanceCondition() {
         && ( activeSensor == ActiveSensor::RIGHT || activeSensor == ActiveSensor::BOTH ) 
         && r <= int(chance * 100)
     ) {
-        reward = rightReward;
+        _reward = rightReward;
         return true;
     }
 
@@ -442,7 +442,7 @@ void FED4::startInterrupts() {
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::LFT_POKE));
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::RGT_POKE));
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::WELL));
-    rtcZero.attachInterrupt(alarmISR);
+    rtcZero.attachInterrupt(alarm_ISR);
     __DSB();
 
     interrupts();
@@ -454,9 +454,9 @@ void FED4::pauseInterrupts() {
 }
 
 void FED4::sleep() {
-    sleepMode = true;
+    _sleep_mode = true;
     __DSB();
-    while(sleepMode) {
+    while(_sleep_mode) {
         __WFI();
     }
 }
@@ -469,33 +469,33 @@ int FED4::getViCountDown() {
 }
 
 bool FED4::getLeftPoke() {
-    if (leftPoke)
+    if (_left_poke)
     {
-        leftPoke = false;
+        _left_poke = false;
         return true;
     }
     return false;
 }
 
 bool FED4::getRightPoke() {
-    if (rightPoke)
+    if (_right_poke)
     {
-        rightPoke = false;
+        _right_poke = false;
         return true;
     }
     return false;
 }
 
 bool FED4::getWellStatus() {
-    if(pelletDropped) {
-        pelletDropped = false;
+    if(_pellet_dropped) {
+        _pellet_dropped = false;
         return true;
     }
     return false;
 }
 
-void FED4::leftPokeHandler() {
-    sleepMode = false;
+void FED4::left_poke_handler() {
+    _sleep_mode = false;
 
     if (ignorePokes)
         return;
@@ -503,15 +503,15 @@ void FED4::leftPokeHandler() {
     if (digitalRead(FED4Pins::LFT_POKE) == LOW)
     {
         long millis_now = millis();
-        if (millis_now - startLftPoke < 50)
+        if (millis_now - _startT_left_poke < 50)
             return;
-        startLftPoke = millis_now;
-        leftPokeStarted = true;
+        _startT_left_poke = millis_now;
+        _left_poke_started = true;
     }
     
     else
     {
-        if (!leftPokeStarted)
+        if (!_left_poke_started)
             return;
         leftPokeCount++;
         Event event = {
@@ -519,14 +519,14 @@ void FED4::leftPokeHandler() {
             .message = EventMsg::LEFT
         };
         logEvent(event);
-        leftPokeStarted = false;
-        leftPoke = true;
-        dtLftPoke = 0;
+        _left_poke_started = false;
+        _left_poke = true;
+        _dT_left_poke = 0;
     }
 }
 
-void FED4::rightPokeHandler() {
-    sleepMode = false;
+void FED4::right_poke_handler() {
+    _sleep_mode = false;
 
     if (ignorePokes)
         return;
@@ -534,15 +534,15 @@ void FED4::rightPokeHandler() {
     if (digitalRead(FED4Pins::RGT_POKE) == LOW)
     {
         long millis_now = millis();
-        if (millis_now - startRgtPoke < 50)
+        if (millis_now - _startT_right_poke < 50)
             return;
-        startRgtPoke = millis_now;
-        rightPokeStarted = true;
+        _startT_right_poke = millis_now;
+        _right_poke_started = true;
     }
     
     else
     {
-        if (!rightPokeStarted)
+        if (!_right_poke_started)
             return;
         rightPokeCount++;
         Event event = {
@@ -550,24 +550,24 @@ void FED4::rightPokeHandler() {
             .message = EventMsg::RIGHT
         };
         logEvent(event);
-        rightPokeStarted = false;
-        rightPoke = true;
-        dtRgtPoke = 0;
+        _right_poke_started = false;
+        _right_poke = true;
+        _dT_right_poke = 0;
     }
 }
 
-void FED4::wellHandler() {
-    pelletDropped = true;
+void FED4::well_handler() {
+    _pellet_dropped = true;
 }
 
-void FED4::alarmHandler() {
-    if (sleepMode) {
+void FED4::alarm_handler() {
+    if (_sleep_mode) {
         if (checkFeedingWindow()) {
-            sleepMode = false;
+            _sleep_mode = false;
         }
 
         updateDisplay(true);
-        flushToSD();
+        flush_to_sd();
 
         uint8_t alarmSeconds = rtcZero.getSeconds() + LP_AWAKE_PERIOD - 1;
         uint8_t alarmMinutes = rtcZero.getMinutes() + (alarmSeconds / 60);
@@ -582,9 +582,9 @@ void FED4::alarmHandler() {
 }
 
 void FED4::feed(int pellets, bool wait) {
-    if (jamError) return;
+    if (_jam_error) return;
 
-    pelletDropped = false;
+    _pellet_dropped = false;
 
     long startOfFeed;
     for (int i = 0; i < pellets; i++) {
@@ -608,7 +608,7 @@ void FED4::feed(int pellets, bool wait) {
             }
             else {
                 logError("Clogged or No Pellets");
-                jamError = true;
+                _jam_error = true;
                 updateDisplay();
                 return;
             }
@@ -622,8 +622,8 @@ void FED4::feed(int pellets, bool wait) {
         __delay(200);
     }
 
-    leftPoke = false;
-    rightPoke = false;
+    _left_poke = false;
+    _right_poke = false;
 
     updateDisplay();
 }
@@ -748,18 +748,18 @@ void FED4::initLogFile() {
     logFile.flush();
 }
 
-void FED4::flushToSD() {
+void FED4::flush_to_sd() {
     pauseInterrupts();
 
-    if (logBufferPos == 0) {
+    if (_log_buffer_pos == 0) {
         return;
     }
 
     digitalWrite(FED4Pins::CARD_SEL, LOW);
     digitalWrite(FED4Pins::SHRP_CS, HIGH);
 
-    logFile.write(logBuffer, logBufferPos);
-    logBufferPos = 0;
+    logFile.write(_log_buffer, _log_buffer_pos);
+    _log_buffer_pos = 0;
 
     logFile.truncate();
     char logFileName[30];
@@ -770,20 +770,20 @@ void FED4::flushToSD() {
     startInterrupts();
 }
 
-void FED4::writeToLog(char row[ROW_MAX_LEN], bool forceFlush) {
+void FED4::write_to_log(char row[ROW_MAX_LEN], bool forceFlush) {
     pauseInterrupts();
 
     int rowLen = strlen(row);
-    if(logBufferPos + rowLen >= FILE_RAM_BUFF_SIZE) {
-        flushToSD();
-        lastFlush = millis();
+    if(_log_buffer_pos + rowLen >= FILE_RAM_BUFF_SIZE) {
+        flush_to_sd();
+        _last_flush = millis();
         return;
     }
-    memcpy(&logBuffer[logBufferPos], row, rowLen);
-    logBufferPos += rowLen;
+    memcpy(&_log_buffer[_log_buffer_pos], row, rowLen);
+    _log_buffer_pos += rowLen;
 
-    if ( (millis() - lastFlush > 50 * 1000) || forceFlush) {
-        flushToSD();
+    if ( (millis() - _last_flush > 50 * 1000) || forceFlush) {
+        flush_to_sd();
     }
 
     startInterrupts();
@@ -915,7 +915,7 @@ void FED4::logEvent(Event e) {
     
     strcat(row, "\n");
     
-    writeToLog(row);
+    write_to_log(row);
 }
 
 void FED4::drawDateTime() {
@@ -1052,7 +1052,7 @@ void FED4::updateDisplay(bool statusOnly) {
     drawDateTime();
     drawBateryCharge();
 
-    if (jamError) {
+    if (_jam_error) {
         print("ERROR: JAM OR NO PELLETS");
     }
 
@@ -1247,27 +1247,27 @@ DateTime FED4::getDateTime() {
     return now;
 }
 
-void FED4::leftPokeIRS() {
+void FED4::left_poke_IRS() {
     if (instance) {
-        instance->leftPokeHandler();
+        instance->left_poke_handler();
     }
 }
 
-void FED4::rightPokeIRS() {
+void FED4::right_poke_IRS() {
     if (instance) {
-        instance->rightPokeHandler();
+        instance->right_poke_handler();
     }
 }
 
-void FED4::wellISR() {
+void FED4::well_ISR() {
     if (instance) {
-        instance->wellHandler();
+        instance->well_handler();
     }
 }
 
-void FED4::alarmISR() {
+void FED4::alarm_ISR() {
     if (instance) {
-        instance->alarmHandler();
+        instance->alarm_handler();
     }
 }
 
