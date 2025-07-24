@@ -85,7 +85,13 @@ class FED4 {
     public:
     static FED4* instance;  
     
-    FED4();
+    FED4() 
+        : display(&SPI, FED4Pins::SHRP_CS, DISPLAY_W, DISPLAY_H),
+          stepper(STEPS, FED4Pins::MTR_1, FED4Pins::MTR_3, FED4Pins::MTR_2, FED4Pins::MTR_4),
+          strip(1, FED4Pins::NEOPXL, NEO_GRB + NEO_KHZ800)
+    {
+        stepper.setSpeed(7);
+    }
     
     // ==== Hardware Objects ====
     SdFat sd;

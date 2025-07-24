@@ -12,8 +12,6 @@ void HardFault_Handler(void) {
     while(1){}
 }
 
-FED4::FED4() {}
-
 void FED4::begin() {
     instance = this;
 
@@ -67,21 +65,6 @@ void FED4::begin() {
     rtcZero.enableAlarm(RTCZero::MATCH_SS);
 
     randomSeed(rtc.now().unixtime());
-
-    display = Adafruit_SharpMem (
-        FED4Pins::SHRP_SCK, FED4Pins::SHRP_MOSI, FED4Pins::SHRP_CS,  
-        DISPLAY_H, DISPLAY_W
-    );
-
-    stepper = Stepper (
-        STEPS, 
-        FED4Pins::MTR_1, FED4Pins::MTR_2, FED4Pins::MTR_3, FED4Pins::MTR_4
-    ); 
-    stepper.setSpeed(7);
-
-    strip = Adafruit_NeoPixel (
-        10, FED4Pins::NEOPXL, NEO_GRBW + NEO_KHZ800
-    );
 
     display.begin();
     display.clearDisplay();
@@ -187,7 +170,7 @@ bool FED4::checkCondition() {
 
 bool FED4::checkFRCondition() {
     if (
-        activeSensor == BOTH
+        activeSensor == ActiveSensor::BOTH
          && (leftPokeCount + rightPokeCount) % ratio == 0 
     ) {
          if ( getLeftPoke() ) {
@@ -201,7 +184,7 @@ bool FED4::checkFRCondition() {
     }
 
     else if (
-        activeSensor == LEFT
+        activeSensor == ActiveSensor::LEFT
         && getLeftPoke()
         && leftPokeCount % ratio == 0
     ) {
@@ -210,7 +193,7 @@ bool FED4::checkFRCondition() {
     }
 
     else if (
-            activeSensor == RIGHT
+            activeSensor == ActiveSensor::RIGHT
             && getRightPoke()
             && rightPokeCount % ratio == 0
     ) {
@@ -237,8 +220,8 @@ bool FED4::checkVICondition() {
         bool pokedRight = getRightPoke();
 
         if (
-            ( pokedLeft && ( activeSensor == LEFT || activeSensor == BOTH ) )
-            || ( pokedRight && ( activeSensor == RIGHT || activeSensor == BOTH) )
+            ( pokedLeft && ( activeSensor == ActiveSensor::LEFT || activeSensor == ActiveSensor::BOTH ) )
+            || ( pokedRight && ( activeSensor == ActiveSensor::RIGHT || activeSensor == ActiveSensor::BOTH) )
         ) {
             viCountDown = getViCountDown();
             viSet = true;
@@ -267,7 +250,7 @@ bool FED4::checkChanceCondition() {
     int r = random(0, 100);
     if (
         getLeftPoke()
-        && ( activeSensor == LEFT || activeSensor == BOTH )
+        && ( activeSensor == ActiveSensor::LEFT || activeSensor == ActiveSensor::BOTH )
         && r <= int(chance * 100)
     ) {
         reward = leftReward;
@@ -275,7 +258,7 @@ bool FED4::checkChanceCondition() {
     }
     else if (
         getRightPoke() 
-        && ( activeSensor == RIGHT || activeSensor == BOTH ) 
+        && ( activeSensor == ActiveSensor::RIGHT || activeSensor == ActiveSensor::BOTH ) 
         && r <= int(chance * 100)
     ) {
         reward = rightReward;
@@ -291,16 +274,16 @@ void FED4::setLightCue() {
         digitalWrite(FED4Pins::MTR_EN, HIGH);
         __delay(2);
 
-        if (activeSensor == BOTH) {
+        if (activeSensor == ActiveSensor::BOTH) {
             strip.setPixelColor(8, 5, 2, 0, 0);
             strip.setPixelColor(9, 5, 2, 0, 0);
             strip.setPixelColor(0, 0, 0, 0);
         }
-        if (activeSensor == LEFT) {
+        if (activeSensor == ActiveSensor::LEFT) {
             strip.setPixelColor(9, 5, 2, 0, 0);
             strip.setPixelColor(0,0,0,0);
         }
-        if (activeSensor == RIGHT) {
+        if (activeSensor == ActiveSensor::RIGHT) {
             strip.setPixelColor(8, 5, 2, 0, 0);
         }
         strip.show();
@@ -347,11 +330,11 @@ void FED4::loadConfig() {
     }
 
     if (config["active sensor"] == "left") {
-        activeSensor = LEFT;
+        activeSensor = ActiveSensor::LEFT;
     } else if (config["active sensor"] == "right") {
-        activeSensor = RIGHT;
+        activeSensor = ActiveSensor::RIGHT;
     } else if (config["active sensor"] == "both") {
-        activeSensor = BOTH;
+        activeSensor = ActiveSensor::BOTH;
     }
 
     leftReward = config["reward"]["left"];
@@ -386,11 +369,11 @@ void FED4::saveConfig() {
         config["mode"]["chance"] = chance;
     }
 
-    if (activeSensor == LEFT) {
+    if (activeSensor == ActiveSensor::LEFT) {
         config["active sensor"] = "left";
-    } else if (activeSensor == RIGHT) {
+    } else if (activeSensor == ActiveSensor::RIGHT) {
         config["active sensor"] = "right";
-    } else if (activeSensor == BOTH) {
+    } else if (activeSensor == ActiveSensor::BOTH) {
         config["active sensor"] = "both";
     }
 
@@ -776,22 +759,22 @@ void FED4::logEvent(Event e) {
     strcat(row, ",");
 
     char activeSensor_str[10];
-    if (activeSensor == LEFT)
+    if (activeSensor == ActiveSensor::LEFT)
         sprintf(activeSensor_str, "Left");
-    if (activeSensor == RIGHT)
+    if (activeSensor == ActiveSensor::RIGHT)
     sprintf(activeSensor_str, "Right");
-    if (activeSensor == BOTH)
+    if (activeSensor == ActiveSensor::BOTH)
         sprintf(activeSensor_str, "Both");
     strcat(row, activeSensor_str);
     strcat(row, ",");
 
     char leftReward_str[5];
-    if (activeSensor == LEFT || activeSensor == BOTH)
+    if (activeSensor == ActiveSensor::LEFT || activeSensor == ActiveSensor::BOTH)
     sprintf(leftReward_str, "%d", leftReward);
     else
         sprintf(leftReward_str, "nan");
     char rightReward_str[5];
-    if (activeSensor == RIGHT || activeSensor == BOTH)
+    if (activeSensor == ActiveSensor::RIGHT || activeSensor == ActiveSensor::BOTH)
         sprintf(rightReward_str, "%d", rightReward);
     else
     sprintf(rightReward_str, "nan");
@@ -990,7 +973,7 @@ void FED4::runConfigMenu() {
     Menu *clockMenu = initClockMenu(modeMenu);
     modeMenu->items[0] = initItem((char *)"Time", clockMenu);
 
-    modeMenu->items[1] = initItem((char *)"Dev no", &deviceNumber, 0, 99, 1);
+    modeMenu->items[1] = initItem((char *)"Dev no", (int*)&deviceNumber, 0, 99, 1);
 
     const char *modes[] = {"FR", "VI", "%"};
     modeMenu->items[2] = initItem((char *)"Mode", modes, 3);
@@ -998,37 +981,37 @@ void FED4::runConfigMenu() {
 
     const char *sensors[] = {"L&R", "L", "R"};
     modeMenu->items[3] = initItem((char *)"Sensor", sensors, 3);
-    if (activeSensor == BOTH) {
+    if (activeSensor == ActiveSensor::BOTH) {
         modeMenu->items[3]->valueIdx = 0;
     }
-    else if (activeSensor == LEFT) {
+    else if (activeSensor == ActiveSensor::LEFT) {
         modeMenu->items[3]->valueIdx = 1;
     }
     else {
         modeMenu->items[3]->valueIdx = 2;
     }
 
-    modeMenu->items[4] = initItem((char *)"L Rew", &leftReward, 0, 255, 1);
-    modeMenu->items[5] = initItem((char *)"R Rew", &rightReward, 0, 255, 1);
+    modeMenu->items[4] = initItem((char *)"L Rew", (int*)&leftReward, 0, 255, 1);
+    modeMenu->items[5] = initItem((char *)"R Rew", (int*)&rightReward, 0, 255, 1);
 
     modeMenu->items[6] = initItem((char*)"Rew Win", &feedWindow);
-    modeMenu->items[7] = initItem((char*)"Rew Beg", &windowStart, 0, 23, 1);
-    modeMenu->items[8] = initItem((char*)"Rew End", &windowEnd, 0, 23, 1);
+    modeMenu->items[7] = initItem((char*)"Rew Beg", (int*)&windowStart, 0, 23, 1);
+    modeMenu->items[8] = initItem((char*)"Rew End", (int*)&windowEnd, 0, 23, 1);
 
     int batteryLevel = getBatteryPercentage();
     runMenu(modeMenu, batteryLevel);
 
     if (modeMenu->items[3]->valueIdx == 0)
     {
-        activeSensor = BOTH;
+        activeSensor = ActiveSensor::BOTH;
     }
     else if (modeMenu->items[3]->valueIdx == 1)
     {
-        activeSensor = LEFT;
+        activeSensor = ActiveSensor::LEFT;
     }
     else
     {
-        activeSensor = RIGHT;
+        activeSensor = ActiveSensor::RIGHT;
     }
 
     mode = modeMenu->items[2]->valueIdx;
@@ -1046,7 +1029,7 @@ void FED4::runViMenu() {
 
     Menu *menu = initMenu(2);
 
-    menu->items[0] = initItem((char*)"Avg T", &viAvg, 0, 120, 5);
+    menu->items[0] = initItem((char*)"Avg T", (int*)&viAvg, 0, 120, 5);
     menu->items[1] = initItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
 
     runMenu(menu);
@@ -1060,7 +1043,7 @@ void FED4::runFrMenu() {
 
     Menu *menu = initMenu(1);
 
-    menu->items[0] = initItem((char*)"Ratio", &ratio, 1, 10, 1);
+    menu->items[0] = initItem((char*)"Ratio", (int*)&ratio, 1, 10, 1);
 
     runMenu(menu);
 
