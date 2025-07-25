@@ -87,7 +87,8 @@ class FED4 {
     
     FED4() 
         : display(&SPI, FED4Pins::SHRP_CS, DISPLAY_W, DISPLAY_H),
-          stepper(STEPS, FED4Pins::MTR_1, FED4Pins::MTR_3, FED4Pins::MTR_2, FED4Pins::MTR_4),
+          stepper(STEPS, FED4Pins::MTR_1, FED4Pins::MTR_3, 
+            FED4Pins::MTR_2, FED4Pins::MTR_4),
           strip(1, FED4Pins::NEOPXL, NEO_GRB + NEO_KHZ800)
     {
         stepper.setSpeed(7);
@@ -163,27 +164,24 @@ class FED4 {
     void makeNoise(int duration = 300);
     
     void runConfigMenu();
-    void runViMenu();
-    void runFrMenu();
+    void runFRMenu();
+    void runVIMenu();
     void runChanceMenu();
     std::function<void()> runOtherModeMenu = nullptr;
     
     bool checkCondition();
-    bool checkFeedingWindow();
-    
-    void setLightCue();
-    int getViCountDown();
-    
     bool checkFRCondition();
     bool checkVICondition();
     bool checkChanceCondition();
     std::function<bool()> checkOtherCondition = nullptr;
     
+    bool checkFeedingWindow();
+    void setLightCue();
+
+    int getViCountDown();
+    
     DateTime getDateTime();
     int getBatteryPercentage();
-    
-    void startInterrupts();
-    void pauseInterrupts();
 
 private:
     // ==== InternalFlags ====
@@ -217,6 +215,9 @@ private:
 
 
     // ==== Interrupts ====
+    void start_interrupts();
+    void pause_interrupts();
+
     void left_poke_handler();
     void right_poke_handler();
     void alarm_handler();
