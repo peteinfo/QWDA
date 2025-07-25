@@ -41,94 +41,6 @@ void debPrint() {
     while(1){};
 }
 
-// MenuItem* initItem(char* name, int* value, int min, int max, int step){
-//   const char* const_name = name;
-//   int *minValue = (int*)malloc(sizeof(int));
-//   int *maxValue = (int*)malloc(sizeof(int));
-//   int *stepValue = (int*)malloc(sizeof(int));
-//   *minValue = min;
-//   *maxValue = max;
-//   *stepValue = step; 
-  
-  
-//   MenuItem *item = (MenuItem*)malloc(sizeof(MenuItem));
-  
-//   *item = {
-//     .name = const_name,
-//     .type = ItemType::ITEM_T_INT,
-//     .value = value,
-//     .minValue = minValue,
-//     .maxValue = maxValue,
-//     .step = stepValue,
-//   };
-  
-//   return item;
-// }
-
-// MenuItem* initItem(char* name, float* value, float min, float max, float step){
-//   const char* const_name = name;
-//   float *minValue = (float*)malloc(sizeof(float));
-//   float *maxValue = (float*)malloc(sizeof(float));
-//   float *stepValue = (float*)malloc(sizeof(float));
-//   *minValue = min;
-//   *maxValue = max;
-//   *stepValue = step; 
-  
-//   MenuItem *item = (MenuItem*)malloc(sizeof(MenuItem));
-
-//   *item = {
-//     .name = const_name,
-//     .type = ItemType::ITEM_T_FLOAT,
-//     .value = value,
-//     .minValue = minValue,
-//     .maxValue = maxValue,
-//     .step = stepValue,
-//   };
-
-//   return item;
-// }
-
-// MenuItem* initItem(char *name, const char** list, int listLen) {
-//   const char* const_name = name;
-
-//   MenuItem *item = (MenuItem*)malloc(sizeof(MenuItem));
-//   *item = {
-//     .name = const_name,
-//     .type = ItemType::ITEM_T_LIST,
-//     .value = (void*)list[0],
-//     .valueIdx = 0,
-//     .list = list,
-//     .listLen = listLen
-//   };
-
-//   return item;
-// }
-
-// MenuItem* initItem(char* name, bool* value) {
-//   const char* const_name = name;
-
-//   MenuItem *item = (MenuItem*)malloc(sizeof(MenuItem));
-//   *item = {
-//     .name = const_name,
-//     .type = ItemType::ITEM_T_BOOL,
-//     .value = (void*)value
-//   };
-
-//   return item;
-// }
-
-// MenuItem* initItem(char *name, Menu *submenu) {
-//   const char* cont_name = name;
-//   MenuItem *item = (MenuItem*)malloc(sizeof(MenuItem));
-//   *item = {
-//     .name = cont_name,
-//     .type = ItemType::ITEM_T_SUBMENU,
-//     .submenu = submenu
-//   };
-
-//   return item;
-// }
-
 MenuItem::MenuItem(char* name, int* value, int min, int max, int step) {
     const char* const_name = name;
 
@@ -201,18 +113,6 @@ MenuItem::~MenuItem() {
     }
 }
 
-// void freeMenuItem(MenuItem *item) {
-//   free(item->value);
-//   free(item->minValue);
-//   free(item->maxValue);
-//   free(item->step);
-//   free(item->list);
-//   if (item->type == ItemType::ITEM_T_SUBMENU) {
-//     freeMenu(item->submenu);
-//   }
-//   free(item);
-// }
-
 const char** initList(int listLen) {
     const char** list = (const char**)malloc(listLen * sizeof(void*));
     return list;
@@ -270,10 +170,6 @@ void previousList(MenuItem *item) {
 Menu::Menu(int itemNo) : Menu::Menu(nullptr, itemNo) {
 }
 
-// Menu* initMenu(int itemNo) {
-//   return initMenu(nullptr, itemNo);
-// }
-
 Menu::Menu(Menu *parent, int itemNo) {
     MenuItem** items = new MenuItem*[itemNo];
 
@@ -284,20 +180,6 @@ Menu::Menu(Menu *parent, int itemNo) {
     this->selectedItem = this->items[0];
     this->selectedIdx = 0;
 }
-
-// Menu* initMenu(Menu *parent, int itemNo) {
-//   Menu* menu = (Menu*)malloc(sizeof(Menu));
-//   MenuItem** items = (MenuItem**)malloc(itemNo * sizeof(MenuItem*));
-  
-//   menu->parent = parent;
-//   menu->type = MENU_T_LIST;
-//   menu->items = items;
-//   menu->itemNo = itemNo;
-//   menu->selectedItem = menu->items[0];
-//   menu->selectedIdx = 0;
-
-//   return menu;
-// }
 
 ClockMenu::ClockMenu(Menu *parent) : Menu::Menu(parent, 5) {
     int *day = new int;
@@ -320,44 +202,12 @@ ClockMenu::ClockMenu(Menu *parent) : Menu::Menu(parent, 5) {
     this->items[4] = minute_itm;
 }
 
-// Menu* initClockMenu(Menu *parent) {
-//   int *day = (int*)malloc(sizeof(int*));
-//   int *month = (int*)malloc(sizeof(int*));
-//   int *year = (int*)malloc(sizeof(int*));
-//   int *hour = (int*)malloc(sizeof(int*));
-//   int *minute = (int*)malloc(sizeof(int*));
-
-//   MenuItem *day_itm = initItem((char*)"day", day, 1, 31, 1);
-//   MenuItem *month_itm = initItem((char*)"month", month, 1, 12, 1);
-//   MenuItem *year_itm = initItem((char*)"year", year, 2000, 2099, 1);
-//   MenuItem *hour_itm = initItem((char*)"hour", hour, 0, 23, 1);
-//   MenuItem *minute_itm = initItem((char*)"minute", minute, 0, 59, 1);
-
-//   Menu *clockMenu = initMenu(parent, 5);
-//   clockMenu->type = MENU_T_CLOCK;
-//   clockMenu->items[0] = day_itm;
-//   clockMenu->items[1] = month_itm;
-//   clockMenu->items[2] = year_itm;
-//   clockMenu->items[3] = hour_itm;
-//   clockMenu->items[4] = minute_itm;
-
-//   return clockMenu;
-// }
-
 Menu::~Menu(){
     for (int i = 0; i < itemNo; i++) {
         delete(items[i]);
     }
     delete[] items;
 }
-
-// void freeMenu(Menu *menu) {
-//   free(menu->parent);
-//   for (int i = 0; i < menu->itemNo; i++) {
-//     freeMenuItem(menu->items[i]);
-//   }
-//   free(menu);
-// }
 
 void handleRightBtn(Menu *menu) {
     switch (menu->selectedItem->type) {
@@ -411,30 +261,38 @@ void handleLeftBtn(Menu *menu) {
 }
 
 void printValue(MenuItem* item) {
-if (item->type == ITEM_T_INT) {
-    int value = *(int*)item->value;
-    menu_display->print(value);
+    ItemType _type = item->type;
+    switch (_type) {
+    case ITEM_T_INT: {
+        int value = *(int*)item->value;
+        menu_display->print(value);
+        break;
     }
-    else if (item->type == ITEM_T_FLOAT) {
-    float value = *(float*)item->value;
-    menu_display->print(value, 1);
+    case ITEM_T_FLOAT: {
+        float value = *(float*)item->value;
+        menu_display->print(value);
+        break;
     }
-    else if (item->type == ITEM_T_BOOL) {
-    bool value = *(bool*)item->value;
-    if (value == true) {
-        menu_display->print("YES");
+    case ITEM_T_BOOL: {
+        bool value = *(bool*)item->value;
+        if (value == true) {
+            menu_display->print("YES");
+        }
+        else {
+            menu_display->print("NO");
+        }
+        break;
     }
-    else {
-        menu_display->print("NO");
+    case ITEM_T_LIST: {
+        item->value = (void*)item->list[item->valueIdx];
+        char *value = (char*)item->value;
+        menu_display->print(value);
+        break;
     }
+    case ITEM_T_SUBMENU: {
+        menu_display->print(">");
+        break;
     }
-    else if (item->type == ITEM_T_LIST) {
-    item->value = (void*)item->list[item->valueIdx];
-    char *value = (char*)item->value;
-    menu_display->print(value);
-    }
-    else if (item->type == ITEM_T_SUBMENU) {
-    menu_display->print(">");
     }
 }
 
@@ -459,7 +317,7 @@ void drawListMenu(Menu* menu) {
         menu_display->setCursor(COL_1_X, y_pos);
         int itemIdx = i + offset;
         if (itemIdx > menu->itemNo) {
-        itemIdx = menu->itemNo - 1;
+            itemIdx = menu->itemNo - 1;
         }
         menu_display->print(menu->items[itemIdx]->name);
         menu_display->print(":");

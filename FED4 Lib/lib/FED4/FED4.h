@@ -85,28 +85,34 @@ class FED4 {
     public:
     static FED4* instance;  
     
-    FED4() 
-        : display(&SPI, FED4Pins::SHRP_CS, DISPLAY_W, DISPLAY_H),
-          stepper(STEPS, FED4Pins::MTR_1, FED4Pins::MTR_3, 
-            FED4Pins::MTR_2, FED4Pins::MTR_4),
-          strip(1, FED4Pins::NEOPXL, NEO_GRB + NEO_KHZ800)
+    FED4() :
+        display(
+            FED4Pins::SHRP_SCK, FED4Pins::SHRP_MOSI, 
+            FED4Pins::SHRP_CS, DISPLAY_H, DISPLAY_W
+        ),
+        stepper(
+            STEPS, FED4Pins::MTR_1, FED4Pins::MTR_2, 
+            FED4Pins::MTR_3, FED4Pins::MTR_4
+        ),
+        strip(10, FED4Pins::NEOPXL, NEO_GRBW + NEO_KHZ800) 
     {
         stepper.setSpeed(7);
     }
-    
+
+
     // ==== Hardware Objects ====
     SdFat sd;
     RTC_PCF8523 rtc;
     RTCZero rtcZero;
     Adafruit_SharpMem display;
-    Stepper stepper; 
+    Stepper stepper;
     Adafruit_NeoPixel strip;
 
-
+    
     // ==== Pulbic Flags ====
     bool ignorePokes = false;
-
-
+    
+    
     // ==== Device State ====
     uint16_t leftPokeCount = 0;
     uint16_t rightPokeCount = 0;

@@ -709,7 +709,8 @@ void FED4::runConfigMenu() {
     Menu *clockMenu = new ClockMenu(modeMenu);
 
     modeMenu->items[0] = new MenuItem((char *)"Time", clockMenu);
-    modeMenu->items[1] = new MenuItem((char *)"Dev no", (int*)&deviceNumber, 0, 99, 1);
+    int* _device_number = new int(deviceNumber);
+    modeMenu->items[1] = new MenuItem((char *)"Dev no", _device_number, 0, 99, 1);
 
     const char *modes[] = {"FR", "VI", "%"};
     modeMenu->items[2] = new MenuItem((char *)"Mode", modes, 3);
@@ -719,22 +720,36 @@ void FED4::runConfigMenu() {
     modeMenu->items[3] = new MenuItem((char *)"Sensor", sensors, 3);
     modeMenu->items[3]->valueIdx = activeSensor;
 
-    modeMenu->items[4] = new MenuItem((char *)"L Rew", (int*)&leftReward, 0, 255, 1);
-    modeMenu->items[5] = new MenuItem((char *)"R Rew", (int*)&rightReward, 0, 255, 1);
+    int* _left_reward = new int(255);
+    int* _right_reward = new int(rightReward);
+    modeMenu->items[4] = new MenuItem((char *)"L Rew", _left_reward, 0, 255, 1);
+    modeMenu->items[5] = new MenuItem((char *)"R Rew", _right_reward, 0, 255, 1);
 
     modeMenu->items[6] = new MenuItem((char*)"Rew Win", &feedWindow);
-    modeMenu->items[7] = new MenuItem((char*)"Rew Beg", (int*)&windowStart, 0, 23, 1);
-    modeMenu->items[8] = new MenuItem((char*)"Rew End", (int*)&windowEnd, 0, 23, 1);
+    int* _window_start = new int(windowStart);
+    int* _window_end = new int(windowEnd);
+    modeMenu->items[7] = new MenuItem((char*)"Rew Beg", _window_start, 0, 23, 1);
+    modeMenu->items[8] = new MenuItem((char*)"Rew End", _window_end, 0, 23, 1);
 
     int batteryLevel = getBatteryPercentage();
     runMenu(modeMenu, batteryLevel);
-
-    activeSensor = modeMenu->items[3]->valueIdx;
-
+    
+    deviceNumber = *_device_number;
     mode = modeMenu->items[2]->valueIdx;
     if(mode > 2) {
         mode = Mode::OTHER;
     }
+    activeSensor = modeMenu->items[3]->valueIdx;
+    leftReward = *_left_reward;
+    rightReward = *_right_reward;
+    windowStart = *_window_start;
+    windowEnd = *_window_end;
+
+    delete(_device_number);
+    delete(_left_reward);    
+    delete(_right_reward);
+    delete(_window_start);
+    delete(_window_end);
 
     delete(modeMenu);
     ignorePokes = false;
@@ -745,10 +760,14 @@ void FED4::runFRMenu() {
 
     Menu *menu = new Menu(1);
 
-    menu->items[0] = new MenuItem((char*)"Ratio", (int*)&ratio, 1, 10, 1);
+    int* _ratio = new int(ratio);
+    menu->items[0] = new MenuItem((char*)"Ratio", _ratio, 1, 10, 1);
 
     runMenu(menu);
 
+    ratio = *_ratio;
+
+    delete(_ratio);
     delete(menu);
     ignorePokes = false;
 }
@@ -758,11 +777,15 @@ void FED4::runVIMenu() {
 
     Menu *menu = new Menu(2);
 
-    menu->items[0] = new MenuItem((char*)"Avg T", (int*)&viAvg, 0, 120, 5);
+    int* _vi_avg = new int(viAvg);
+    menu->items[0] = new MenuItem((char*)"Avg T", _vi_avg, 0, 120, 5);
     menu->items[1] = new MenuItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
 
     runMenu(menu);
-    
+
+    viAvg = *_vi_avg;
+
+    delete(_vi_avg);
     delete(menu);
     ignorePokes = false;
 }
