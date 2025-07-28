@@ -31,7 +31,7 @@ void FED4::begin() {
     // Interrupts
     attachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE), left_poke_IRS, CHANGE);
     attachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE), right_poke_IRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), well_ISR, FALLING);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), well_ISR, CHANGE);
     
     // Wakeup sources
     EIC->WAKEUP.reg |= (1 << 4);   // FED4Pins::LFT_POKE
@@ -46,12 +46,6 @@ void FED4::begin() {
     while (GCLK->STATUS.bit.SYNCBUSY);
     
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk; // Enable deep sleep mode
-    
-    rtc.begin();
-    if (rtc.lostPower())
-    {
-        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    }
     
     rtcZero.begin();
     rtcZero.setTime(rtc.now().hour(), rtc.now().minute(), rtc.now().second());
@@ -138,7 +132,11 @@ void FED4::feed(int pellets, bool wait) {
     long startOfFeed;
     for (int i = 0; i < pellets; i++) {
         startOfFeed = millis();
+#if OLD_WELL
+        while(_pellet_in_well == false)
+#else
         while (getWellStatus() == false)
+#endif
         {
             long deltaT = millis() - startOfFeed;
             if (deltaT < 15000)
@@ -162,6 +160,7 @@ void FED4::feed(int pellets, bool wait) {
                 return;
             }
         }
+
         pelletsDispensed++;
         Event event = {
             .time = getDateTime(),
@@ -169,6 +168,10 @@ void FED4::feed(int pellets, bool wait) {
         };
         logEvent(event);
         __delay(200);
+
+#if OLD_WELL
+        while(_pellet_in_well);
+#endif
     }
 
     _left_poke = false;
@@ -369,7 +372,7 @@ void FED4::initLogFile() {
     logFile.rewind();
 
     logFile.print("TimeStamp,");
-    logFile.print("Battery,");
+    logFile.print("Bat V,");
     logFile.print("Device Number,");
     logFile.print("Mode,");
     logFile.print("Event,");
@@ -415,7 +418,14 @@ void FED4::logEvent(Event e) {
     strcat(row, ",");
 
     char battery_str[8];
-    snprintf(battery_str, sizeof(battery_str), "%d", getBatteryPercentage());
+    pause_interrupts();
+    analogReadResolution(10);
+    float batteryVoltage = analogRead(FED4Pins::VBAT);
+    start_interrupts();
+    batteryVoltage *= 2;
+    batteryVoltage *= 3.3;
+    batteryVoltage /= 1024;
+    snprintf(battery_str, sizeof(battery_str), "%.2f", batteryVoltage);
     strcat(row, battery_str);
     strcat(row, ",");
     
@@ -720,7 +730,7 @@ void FED4::runConfigMenu() {
     modeMenu->items[3] = new MenuItem((char *)"Sensor", sensors, 3);
     modeMenu->items[3]->valueIdx = activeSensor;
 
-    int* _left_reward = new int(255);
+    int* _left_reward = new int(leftReward);
     int* _right_reward = new int(rightReward);
     modeMenu->items[4] = new MenuItem((char *)"L Rew", _left_reward, 0, 255, 1);
     modeMenu->items[5] = new MenuItem((char *)"R Rew", _right_reward, 0, 255, 1);
@@ -1268,7 +1278,16 @@ void FED4::alarm_handler() {
 }
 
 void FED4::well_handler() {
+#if OLD_WELL
+    if(digitalRead(FED4Pins::WELL) == LOW) {
+        _pellet_in_well = true;
+    }
+    else {
+        _pellet_in_well = false;
+    }
+#else 
     _pellet_dropped = true;
+#endif
 }
 
 void FED4::left_poke_IRS() {

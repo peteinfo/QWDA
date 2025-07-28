@@ -14,7 +14,7 @@
 
 #include "Menu.h"
 
-#define DEBUG // Without this the code doesn't run ???
+#define OLD_WELL false
 
 constexpr uint16_t LP_AWAKE_PERIOD = 30; // seconds
 
@@ -96,6 +96,10 @@ class FED4 {
         ),
         strip(10, FED4Pins::NEOPXL, NEO_GRBW + NEO_KHZ800) 
     {
+        rtc.begin();
+        if (rtc.lostPower()) {
+            rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+        }
         stepper.setSpeed(7);
     }
 
@@ -196,6 +200,7 @@ private:
     volatile bool _left_poke      = false;
     volatile bool _right_poke     = false;
     volatile bool _pellet_dropped = false;
+    volatile bool _pellet_in_well = false;
     
     bool _jam_error               = false;
     bool _sd_error                = false;
