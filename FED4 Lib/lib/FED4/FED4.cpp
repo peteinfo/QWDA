@@ -60,11 +60,6 @@ void FED4::begin() {
     
     randomSeed(rtc.now().unixtime());
     
-    display.begin();
-    display.clearDisplay();
-    display.setRotation(3);
-    display.refresh();
-    
     digitalWrite(FED4Pins::MTR_EN, HIGH);
     __delay(2);
     strip.begin();
@@ -79,17 +74,21 @@ void FED4::begin() {
     menu_display = &display;
     menu_rtc = &rtc;
     runConfigMenu();
-    if (mode == Mode::FR) {
+    switch (mode) {
+    case Mode::FR:
         runFRMenu();
-    }
-    if (mode == Mode::VI) {
+        break;
+    case Mode::VI:
         runVIMenu();
-    }
-    if (mode == Mode::CHANCE) {
+        break;
+    case Mode::CHANCE:
         runChanceMenu();
-    }
-    if (mode == Mode::OTHER) {
+        break;
+    case Mode::OTHER:
         runOtherModeMenu();
+        break;
+    default:
+        break;
     }
     
     saveConfig();
@@ -236,7 +235,7 @@ void FED4::saveConfig() {
     File configFile = sd.open("CONFIG.json", FILE_WRITE);
     JsonDocument config;
 
-    config["device number"] = 0;
+    config["device number"] = deviceNumber;
 
     switch (mode) {
     case Mode::FR:
@@ -714,103 +713,77 @@ void FED4::makeNoise(int duration) {
 void FED4::runConfigMenu() {
     ignorePokes = true;
 
-    Menu *modeMenu = new Menu(9);
+    Menu configMenu = Menu();
 
-    Menu *clockMenu = new ClockMenu(modeMenu);
+    configMenu.add("Time", new ClockMenu());
+    configMenu.add("Dev no", &deviceNumber, 0, 99, 1);
 
-    modeMenu->items[0] = new MenuItem((char *)"Time", clockMenu);
-    int* _device_number = new int(deviceNumber);
-    modeMenu->items[1] = new MenuItem((char *)"Dev no", _device_number, 0, 99, 1);
+    const char* modes[] = {"FR", "VI", "%"};
+    configMenu.add("Mode", &mode, modes, 3);
 
-    const char *modes[] = {"FR", "VI", "%"};
-    modeMenu->items[2] = new MenuItem((char *)"Mode", modes, 3);
-    modeMenu->items[2]->valueIdx = mode;
+    const char* sensors[] = {"L", "R", "L&R"};
+    configMenu.add("Sensor", &activeSensor, sensors, 3);
 
-    const char *sensors[] = {"L", "R", "L&R"};
-    modeMenu->items[3] = new MenuItem((char *)"Sensor", sensors, 3);
-    modeMenu->items[3]->valueIdx = activeSensor;
+    configMenu.add("L Rew", &leftReward, 0, 255, 1);
+    configMenu.add("R Rew", &rightReward, 0, 255, 1);
 
-    int* _left_reward = new int(leftReward);
-    int* _right_reward = new int(rightReward);
-    modeMenu->items[4] = new MenuItem((char *)"L Rew", _left_reward, 0, 255, 1);
-    modeMenu->items[5] = new MenuItem((char *)"R Rew", _right_reward, 0, 255, 1);
-
-    modeMenu->items[6] = new MenuItem((char*)"Rew Win", &feedWindow);
-    int* _window_start = new int(windowStart);
-    int* _window_end = new int(windowEnd);
-    modeMenu->items[7] = new MenuItem((char*)"Rew Beg", _window_start, 0, 23, 1);
-    modeMenu->items[8] = new MenuItem((char*)"Rew End", _window_end, 0, 23, 1);
-
-    int batteryLevel = getBatteryPercentage();
-    runMenu(modeMenu, batteryLevel);
+    configMenu.add("Rew Win", &feedWindow);
+    configMenu.add("Rew Beg", &windowStart, 0, 23, 1);
+    configMenu.add("Rew End", &windowEnd, 0, 23, 1);
     
-    deviceNumber = *_device_number;
-    mode = modeMenu->items[2]->valueIdx;
-    if(mode > 2) {
-        mode = Mode::OTHER;
-    }
-    activeSensor = modeMenu->items[3]->valueIdx;
-    leftReward = *_left_reward;
-    rightReward = *_right_reward;
-    windowStart = *_window_start;
-    windowEnd = *_window_end;
+    int batteryLevel = getBatteryPercentage();
+    configMenu.run(batteryLevel); 
 
-    delete(_device_number);
-    delete(_left_reward);    
-    delete(_right_reward);
-    delete(_window_start);
-    delete(_window_end);
-
-    delete(modeMenu);
     ignorePokes = false;
 }
 
 void FED4::runFRMenu() {
-    ignorePokes = true;
+    while(1) {};
+    // ignorePokes = true;
 
-    Menu *menu = new Menu(1);
+    // Menu *menu = new Menu(1);
 
-    int* _ratio = new int(ratio);
-    menu->items[0] = new MenuItem((char*)"Ratio", _ratio, 1, 10, 1);
+    // int* _ratio = new int(ratio);
+    // menu->items[0] = new MenuItem((char*)"Ratio", _ratio, 1, 10, 1);
 
-    runMenu(menu);
+    // runMenu(menu);
 
-    ratio = *_ratio;
+    // ratio = *_ratio;
 
-    delete(_ratio);
-    delete(menu);
-    ignorePokes = false;
+    // delete(_ratio);
+    // delete(menu);
+    // ignorePokes = false;
 }
 
 void FED4::runVIMenu() {
-    ignorePokes = true;
+    // ignorePokes = true;
 
-    Menu *menu = new Menu(2);
+    // Menu *menu = new Menu(2);
 
-    int* _vi_avg = new int(viAvg);
-    menu->items[0] = new MenuItem((char*)"Avg T", _vi_avg, 0, 120, 5);
-    menu->items[1] = new MenuItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
+    // int* _vi_avg = new int(viAvg);
+    // menu->items[0] = new MenuItem((char*)"Avg T", _vi_avg, 0, 120, 5);
+    // menu->items[1] = new MenuItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
 
-    runMenu(menu);
+    // runMenu(menu);
 
-    viAvg = *_vi_avg;
+    // viAvg = *_vi_avg;
 
-    delete(_vi_avg);
-    delete(menu);
-    ignorePokes = false;
+    // delete(_vi_avg);
+    // delete(menu);
+    // ignorePokes = false;
 }
 
 void FED4::runChanceMenu() {
-    ignorePokes = true;
+    // ignorePokes = true;
 
-    Menu *menu = new Menu(1);
+    // Menu *menu = new Menu(1);
 
-    menu->items[0] = new MenuItem((char*)"Chance", &chance, 0.0, 1.0, 0.1);
+    // menu->items[0] = new MenuItem((char*)"Chance", &chance, 0.0, 1.0, 0.1);
 
-    runMenu(menu);
+    // runMenu(menu);
 
-    delete(menu);
-    ignorePokes = false;
+    // delete(menu);
+    // ignorePokes = false;
 }
 
 bool FED4::checkCondition() {

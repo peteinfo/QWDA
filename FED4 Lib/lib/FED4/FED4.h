@@ -101,6 +101,11 @@ class FED4 {
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         }
         stepper.setSpeed(7);
+        
+        display.begin();
+        display.clearDisplay();
+        display.setRotation(3);
+        display.refresh();
     }
 
 

@@ -39,11 +39,14 @@ typedef struct MenuItem MenuItem;
 typedef struct Menu Menu;
 
 typedef struct MenuItem {
-    MenuItem(char* name, int* value, int min, int max, int step);
-    MenuItem(char* name, float* value, float min, float max, float step);
-    MenuItem(char* name, bool* value);
-    MenuItem(char *name, const char** list, int listLen);
-    MenuItem(char *name, Menu *submenu);
+    MenuItem(const char* name, uint8_t*value, uint8_t min, uint8_t max, uint8_t step);
+    MenuItem(const char* name, int8_t*value, int8_t min, int8_t max, int8_t step);
+    MenuItem(const char* name, int* value, int min, int max, int step);
+    MenuItem(const char* name, float* value, float min, float max, float step);
+    MenuItem(const char* name, bool* value);
+    MenuItem(const char *name, int8_t* idx, const char** list, int listLen);
+    MenuItem(const char *name, uint8_t* idx, const char** list, int listLen);
+    MenuItem(const char *name, Menu *submenu);
     ~MenuItem();
 
     const char *name;
@@ -55,18 +58,12 @@ typedef struct MenuItem {
     void *maxValue;
     void *step;
 
-    int valueIdx;
+    uint8_t* valueIdx;
     const char **list;
     int listLen;
 
     Menu *submenu;
 } MenuItem;
-// MenuItem* initItem(char* name, int* value, int min, int max, int step);
-// MenuItem* initItem(char* name, float* value, float min, float max, float step);
-// MenuItem* initItem(char* name, bool* value);
-// MenuItem* initItem(char *name, const char** list, int listLen);
-// MenuItem* initItem(char *name, Menu *submenu);
-// void freeMenuItem(MenuItem *item);
 const char** initList(int listLen);
 void increaseInt(MenuItem *item);
 void decreaseInt(MenuItem *item);
@@ -78,6 +75,7 @@ void previousList(MenuItem *item);
 
 
 typedef struct Menu {
+    Menu();
     Menu(int itemNo);
     Menu(Menu *parent, int itemNo);
     ~Menu();
@@ -85,20 +83,35 @@ typedef struct Menu {
     Menu *parent;
     MenuType type;
     MenuItem **items;
-    int itemNo;
+    uint8_t itemNo = 0;
+    uint8_t capacity = 0;
     MenuItem *selectedItem;
     int selectedIdx;
+
+    void add(const char* name, uint8_t*value, uint8_t min, uint8_t max, uint8_t step);
+    void add(const char* name, int8_t*value, int8_t min, int8_t max, int8_t step);
+    void add(const char* name, int* value, int min, int max, int step);
+    void add(const char* name, float* value, float min, float max, float step);
+    void add(const char* name, bool* value);
+    void add(const char *name, uint8_t* idx, const char** list, int listLen);
+    void add(const char *name, int8_t* idx, const char** list, int listLen);
+    void add(const char *name, Menu *submenu);
+    void add(MenuItem* item);
+    void run(int batteryLevel = -1);
 } Menu;
-// Menu* initMenu(int itemNo);
-// Menu* initMenu(Menu *parent, int itemNo);
-// Menu* initClockMenu(Menu *parent);
-// void freeMenu(Menu *menu);
 void handleRightBtn(Menu *item);
 void handleLeftBtn(Menu *item);
-void runMenu(Menu *menu, int batteryLevel = -1);
 
 struct ClockMenu : Menu {
+    ClockMenu();
     ClockMenu(Menu *parent);
+    ~ClockMenu();
+
+    int *day;
+    int *month;
+    int *year;
+    int *hour;
+    int *minute;
 };
 
 #endif

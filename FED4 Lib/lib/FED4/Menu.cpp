@@ -41,10 +41,18 @@ void debPrint() {
     while(1){};
 }
 
-MenuItem::MenuItem(char* name, int* value, int min, int max, int step) {
-    const char* const_name = name;
+MenuItem::MenuItem(const char* name, uint8_t* value, uint8_t min, uint8_t max, uint8_t step) :
+    MenuItem::MenuItem(name, (int*)value, (int)min, (int)max, (int)step) {
 
-    this->name = const_name;
+}
+
+MenuItem::MenuItem(const char* name, int8_t* value, int8_t min, int8_t max, int8_t step) :
+    MenuItem::MenuItem(name, (int*)value, (int)min, (int)max, (int)step) {
+
+}
+
+MenuItem::MenuItem(const char* name, int* value, int min, int max, int step) {
+    this->name = name;
     this->type = ItemType::ITEM_T_INT;
     this->value = value;
     this->minValue = new int(min);
@@ -52,10 +60,8 @@ MenuItem::MenuItem(char* name, int* value, int min, int max, int step) {
     this->step = new int(step);
 }
 
-MenuItem::MenuItem(char* name, float* value, float min, float max, float step){
-    const char* const_name = name;
-
-    this->name = const_name;
+MenuItem::MenuItem(const char* name, float* value, float min, float max, float step){
+    this->name = name;
     this->type = ItemType::ITEM_T_FLOAT;
     this->value = value;
     this->minValue = new float(min);
@@ -63,29 +69,33 @@ MenuItem::MenuItem(char* name, float* value, float min, float max, float step){
     this->step = new float(step);
 }
 
-MenuItem::MenuItem(char *name, const char** list, int listLen) {
-    const char* const_name = name;
-
-    this->name = const_name;
-    this->type = ItemType::ITEM_T_LIST;
-    this->value = (void*)list[0];
-    this->valueIdx = 0;
-    this->list = list;
-    this->listLen = listLen;
+MenuItem::MenuItem(const char *name, int8_t* idx, const char** list, int listLen) : 
+ MenuItem::MenuItem(name, (uint8_t*)idx, list, listLen) {
 }
 
-MenuItem::MenuItem(char* name, bool* value) {
-    const char* const_name = name;
+MenuItem::MenuItem(const char *name, uint8_t* idx, const char** list, int listLen) {
+    this->name = name;
+    this->type = ItemType::ITEM_T_LIST;
+    this->valueIdx = idx;
+    this->listLen = listLen;
 
-    this->name = const_name;
+    const char** copiedList = new const char*[listLen];
+    for (int i = 0; i < listLen; i++) {
+        copiedList[i] = list[i];
+    }
+
+    this->list = copiedList;
+    this->value = (void*)copiedList[0];
+}
+
+MenuItem::MenuItem(const char* name, bool* value) {
+    this->name = name;
     this->type = ItemType::ITEM_T_BOOL;
     this->value = (void*)value;
 }
 
-MenuItem::MenuItem(char *name, Menu *submenu) {
-    const char* cont_name = name;
-
-    this->name = cont_name;
+MenuItem::MenuItem(const char *name, Menu *submenu) {
+    this->name = name;
     this->type = ItemType::ITEM_T_SUBMENU;
     this->submenu = submenu;
 }
@@ -108,7 +118,11 @@ MenuItem::~MenuItem() {
         delete submenu;
         break;
 
-    default: // ITEM_T_BOOL & ITEM_T_LIST
+    case ITEM_T_LIST:
+        delete[] list;
+        break;
+    
+    default: // ITEM_T_BOOL 
         break;
     }
 }
@@ -156,37 +170,64 @@ void changeBool(MenuItem *item) {
 }
 
 void nextList(MenuItem *item) {
-    int newIdx = (item->valueIdx + 1) % item->listLen;
+    uint newIdx = (*item->valueIdx + 1) % item->listLen;
     item->value = (void*)item->list[newIdx];
-    item->valueIdx = newIdx;
+    *item->valueIdx = newIdx;
 }
 
 void previousList(MenuItem *item) {
-    int newIdx = (item->valueIdx - 1) % item->listLen;
+    uint newIdx = (*item->valueIdx - 1) % item->listLen;
     item->value = (void*)item->list[newIdx];
-    item->valueIdx = newIdx;
+    *item->valueIdx = newIdx;
+}
+
+Menu::Menu() : Menu::Menu(0) {
+
 }
 
 Menu::Menu(int itemNo) : Menu::Menu(nullptr, itemNo) {
 }
 
 Menu::Menu(Menu *parent, int itemNo) {
-    MenuItem** items = new MenuItem*[itemNo];
-
+    if(itemNo > 0) {
+        MenuItem** items = new MenuItem*[itemNo];
+        memset(items, 0, sizeof(MenuItem*) * itemNo);
+        this->items = items;
+        this->selectedItem = this->items[0];
+    }
+    else {
+        this->items = nullptr;
+        this->selectedItem = nullptr;
+    }
+    
     this->parent = parent;
-    this->type = MENU_T_LIST;
-    this->items = items;
     this->itemNo = itemNo;
-    this->selectedItem = this->items[0];
+    this->type = MENU_T_LIST;
     this->selectedIdx = 0;
 }
 
+Menu::~Menu(){
+    for (int i = 0; i < itemNo; i++) {
+        delete items[i];
+        items[i] = nullptr;
+    }
+    delete[] items;
+    items = nullptr;
+    if (selectedItem) {
+        delete selectedItem;
+    }
+}
+
+ClockMenu::ClockMenu() : ClockMenu::ClockMenu(nullptr) {
+
+}
+
 ClockMenu::ClockMenu(Menu *parent) : Menu::Menu(parent, 5) {
-    int *day = new int;
-    int *month = new int;
-    int *year = new int;
-    int *hour = new int;
-    int *minute = new int;
+    day = new int;
+    month = new int;
+    year = new int;
+    hour = new int;
+    minute = new int;
 
     MenuItem *day_itm = new MenuItem((char*)"day", day, 1, 31, 1);
     MenuItem *month_itm = new MenuItem((char*)"month", month, 1, 12, 1);
@@ -202,11 +243,12 @@ ClockMenu::ClockMenu(Menu *parent) : Menu::Menu(parent, 5) {
     this->items[4] = minute_itm;
 }
 
-Menu::~Menu(){
-    for (int i = 0; i < itemNo; i++) {
-        delete(items[i]);
-    }
-    delete[] items;
+ClockMenu::~ClockMenu() {
+    delete day;
+    delete month;
+    delete year;
+    delete hour;
+    delete minute;
 }
 
 void handleRightBtn(Menu *menu) {
@@ -214,25 +256,25 @@ void handleRightBtn(Menu *menu) {
     case ItemType::ITEM_T_INT:
         increaseInt(menu->selectedItem);
         break;
-
+        
     case ItemType::ITEM_T_FLOAT:
         increaseFloat(menu->selectedItem);
         break;
-
+        
     case ItemType::ITEM_T_LIST:
         nextList(menu->selectedItem);
         break;
-
+        
     case ItemType::ITEM_T_BOOL:
         changeBool(menu->selectedItem);
         break;
-
+        
     case ItemType::ITEM_T_SUBMENU:
-        runMenu(menu->selectedItem->submenu);
+        menu->selectedItem->submenu->run();
         drawMenu(menu);
         break;
-
-    default:
+        
+        default:
         break;
     }
 }
@@ -284,9 +326,9 @@ void printValue(MenuItem* item) {
         break;
     }
     case ITEM_T_LIST: {
-        item->value = (void*)item->list[item->valueIdx];
-        char *value = (char*)item->value;
-        menu_display->print(value);
+        uint idx = *item->valueIdx;
+        item->value = (void*)item->list[idx];
+        menu_display->print((char*)item->value);
         break;
     }
     case ITEM_T_SUBMENU: {
@@ -516,8 +558,6 @@ void drawSelection(Menu *menu) {
     else if (menu->type == MENU_T_CLOCK) {
         drawClockSelection(menu);
     }
-
-    menu_display->refresh();
 }
 
 typedef enum {
@@ -567,23 +607,90 @@ InputType getInput(int sameLastInputs) {
     return input;
 }
 
+void Menu::add(const char* name, uint8_t*value, uint8_t min, uint8_t max, uint8_t step) {
+    MenuItem* newItem = new MenuItem(name, value, min, max, step);
+    add(newItem);
+}
+
+void Menu::add(const char* name, int8_t*value, int8_t min, int8_t max, int8_t step) {
+    MenuItem* newItem = new MenuItem(name, value, min, max, step);
+    add(newItem);
+}
+
+void Menu::add(const char* name, int* value, int min, int max, int step) {
+    MenuItem* newItem = new MenuItem(name, value, min, max, step);
+    add(newItem);
+}
+
+void Menu::add(const char* name, float* value, float min, float max, float step) {
+    MenuItem* newItem = new MenuItem(name, value, min, max, step);
+    add(newItem);
+}
+
+void Menu::add(const char* name, bool* value) {
+    MenuItem* newItem = new MenuItem(name, value);
+    add(newItem);
+}
+
+void Menu::add(const char *name, int8_t* idx, const char** list, int listLen) {
+    MenuItem* newItem = new MenuItem(name, idx, list, listLen);
+    add(newItem);
+}
+
+void Menu::add(const char *name, uint8_t* idx, const char** list, int listLen) {
+    MenuItem* newItem = new MenuItem(name, idx, list, listLen);
+    add(newItem);
+}
+
+void Menu::add(const char *name, Menu *submenu) {
+    MenuItem* newItem = new MenuItem(name, submenu);
+    submenu->parent = this;
+    add(newItem);
+}
+
+void Menu::add(MenuItem* item) {
+    itemNo++;
+    if (itemNo >= capacity) {
+        if (capacity == 0) {
+            capacity = 1;
+        }
+        else {
+            capacity *= 2;
+        }
+        MenuItem** newItems = new MenuItem*[capacity];
+        memset(newItems, 0, sizeof(MenuItem*) * capacity);
+        if (items) {
+            memcpy(newItems, items, sizeof(MenuItem*) * capacity);
+            delete[] items;
+        }
+        items = newItems;  
+        if (!selectedItem) {
+            selectedItem = items[0];
+        }
+    }
+    items[itemNo-1] = item;
+}
+
 long lastInputMillis = 0;
-void runMenu(Menu *menu, int batteryLevel) {
-    if (menu->type == MENU_T_CLOCK) {
-        setClock(menu);
+void Menu::run(int batteryLevel) {
+    if (type == MENU_T_CLOCK) {
+        setClock(this);
     }
 
-    menu->selectedIdx = 0;
-    menu->selectedItem = menu->items[0];
+    selectedIdx = 0;
+    selectedItem = items[0];
     menu_display->clearDisplay();
-    drawMenu(menu, batteryLevel);
-    drawSelection(menu);
+    drawMenu(this, batteryLevel);
+    drawSelection(this);
     menu_display->refresh();
 
     InputType lastInput = I_MISS;
     int sameLastInputs = 0;
-    while (true) {
+    bool done = false;
+    while (!done) {
         InputType input = getInput(sameLastInputs);
+        InputType* p = &input;
+        Serial.println(int(p));
         long dt = millis() - lastInputMillis;
         lastInputMillis = millis();
         if (input == lastInput && dt <= 700) {
@@ -593,58 +700,60 @@ void runMenu(Menu *menu, int batteryLevel) {
         sameLastInputs = 0;
         }
 
-
-        if (input == I_LEFT) {
-        if (menu->selectedIdx == SEL_BACK) {
+        switch (input) {
+        case I_LEFT:
+            if (selectedIdx == SEL_BACK) {
+                done = true;
+            }
+            else handleLeftBtn(this);
             break;
-        }
-        handleLeftBtn(menu);
-        }
-        else if (input == I_RIGHT) {
-        if (menu->selectedIdx == SEL_DONE) {
-            break;
-        }
-        handleRightBtn(menu);
-        }
-        else if (input == I_BOTH) {
-        if (menu->selectedIdx == SEL_BACK || menu->selectedIdx == SEL_DONE) {
-            menu->selectedIdx = 0;
-        }
-        else {
-            menu->selectedIdx++;
-        }
 
-        if (menu->selectedIdx >= menu->itemNo) {
-            if (menu->parent != nullptr) {
-            menu->selectedIdx = SEL_BACK;
+        case I_RIGHT:
+            if (selectedIdx == SEL_DONE) {
+                done = true;
+            }
+            else handleRightBtn(this);
+            break;
+
+        case I_BOTH:
+            if (selectedIdx == SEL_BACK || selectedIdx == SEL_DONE) {
+                selectedIdx = 0;
             }
             else {
-            menu->selectedIdx = SEL_DONE;
+                selectedIdx++;
             }
-        }
+            if (selectedIdx >= itemNo) {
+                if (parent != nullptr) {
+                    selectedIdx = SEL_BACK;
+                }
+                else {
+                    selectedIdx = SEL_DONE;
+                }
+            }
+            selectedItem = items[selectedIdx];
+            menu_display->clearDisplay();
+            drawMenu(this);        
+            break;
 
-        if (menu->selectedIdx != SEL_BACK && menu->selectedIdx != SEL_DONE) {
-            menu->selectedItem = menu->items[menu->selectedIdx];
-        }
+        default:
+            break;
+        };
 
-        menu_display->clearDisplay();
-        drawMenu(menu);
-        }
         if (input != I_MISS) {
-        drawSelection(menu);
-        menu_display->refresh();
+            drawSelection(this);
+            menu_display->refresh();
         }
         
         lastInput = input;
     }
     
-    if (menu->type == MENU_T_CLOCK) {
+    if (type == MENU_T_CLOCK) {
         DateTime now = DateTime(
-        *(int*)menu->items[2]->value - 2000,
-        *(int*)menu->items[1]->value,
-        *(int*)menu->items[0]->value,
-        *(int*)menu->items[3]->value,
-        *(int*)menu->items[4]->value
+        *(int*)items[2]->value - 2000,
+        *(int*)items[1]->value,
+        *(int*)items[0]->value,
+        *(int*)items[3]->value,
+        *(int*)items[4]->value
         );
         menu_rtc->adjust(now);
     }
