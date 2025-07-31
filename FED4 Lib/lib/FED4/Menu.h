@@ -31,6 +31,12 @@ typedef enum {
 } ItemType;
 
 typedef enum {
+    INT32,
+    UINT8,
+    INT8
+} IntType;
+
+typedef enum {
     MENU_T_LIST,
     MENU_T_CLOCK
 } MenuType;
@@ -51,6 +57,7 @@ typedef struct MenuItem {
 
     const char *name;
     ItemType type;
+    IntType intType;
 
     void *value;
 

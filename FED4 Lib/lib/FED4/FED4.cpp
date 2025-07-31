@@ -738,52 +738,34 @@ void FED4::runConfigMenu() {
 }
 
 void FED4::runFRMenu() {
-    while(1) {};
-    // ignorePokes = true;
+    ignorePokes = true;
 
-    // Menu *menu = new Menu(1);
-
-    // int* _ratio = new int(ratio);
-    // menu->items[0] = new MenuItem((char*)"Ratio", _ratio, 1, 10, 1);
-
-    // runMenu(menu);
-
-    // ratio = *_ratio;
-
-    // delete(_ratio);
-    // delete(menu);
-    // ignorePokes = false;
+    Menu frMenu = Menu();
+    frMenu.add("Ratio", &ratio, 1, 10, 1);
+    frMenu.run();
+    
+    ignorePokes = false;
 }
 
 void FED4::runVIMenu() {
-    // ignorePokes = true;
+    ignorePokes = true;
 
-    // Menu *menu = new Menu(2);
+    Menu viMenu = Menu();
+    viMenu.add("Avg T", &viAvg, 1, 120, 5);
+    viMenu.add("Spread", &viSpread, 0.0, 1.0, 0.05);
+    viMenu.run();
 
-    // int* _vi_avg = new int(viAvg);
-    // menu->items[0] = new MenuItem((char*)"Avg T", _vi_avg, 0, 120, 5);
-    // menu->items[1] = new MenuItem((char*)"Spread", &viSpread, 0.0, 1.0, 0.05);
-
-    // runMenu(menu);
-
-    // viAvg = *_vi_avg;
-
-    // delete(_vi_avg);
-    // delete(menu);
-    // ignorePokes = false;
+    ignorePokes = false;
 }
 
 void FED4::runChanceMenu() {
-    // ignorePokes = true;
+    ignorePokes = true;
 
-    // Menu *menu = new Menu(1);
+    Menu chanceMenu = Menu();
+    chanceMenu.add("Chance", &chance, 0.0, 1.0, 0.05);
+    chanceMenu.run();
 
-    // menu->items[0] = new MenuItem((char*)"Chance", &chance, 0.0, 1.0, 0.1);
-
-    // runMenu(menu);
-
-    // delete(menu);
-    // ignorePokes = false;
+    ignorePokes = false;
 }
 
 bool FED4::checkCondition() {

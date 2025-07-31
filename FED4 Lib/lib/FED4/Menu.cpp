@@ -43,17 +43,18 @@ void debPrint() {
 
 MenuItem::MenuItem(const char* name, uint8_t* value, uint8_t min, uint8_t max, uint8_t step) :
     MenuItem::MenuItem(name, (int*)value, (int)min, (int)max, (int)step) {
-
+    intType = IntType::UINT8;
 }
 
 MenuItem::MenuItem(const char* name, int8_t* value, int8_t min, int8_t max, int8_t step) :
     MenuItem::MenuItem(name, (int*)value, (int)min, (int)max, (int)step) {
-
+    intType = IntType::INT8;
 }
 
 MenuItem::MenuItem(const char* name, int* value, int min, int max, int step) {
     this->name = name;
     this->type = ItemType::ITEM_T_INT;
+    this->intType = IntType::INT32;
     this->value = value;
     this->minValue = new int(min);
     this->maxValue = new int(max);
@@ -133,19 +134,55 @@ const char** initList(int listLen) {
 }
 
 void increaseInt(MenuItem *item) {
-    int newValue = *(int*)item->value + *(int*)item->step;
-    if (newValue > *(int*)item->maxValue) {
-        newValue = *(int*)item->maxValue;
+    uint8_t _intType = item->intType;
+    switch (_intType) {
+    case IntType::INT32: 
+        *(int*)item->value += *(int*)item->step;
+        if (*(int*)item->value > *(int*)item->maxValue) {
+            *(int*)item->value = *(int*)item->maxValue;
+        }
+        break;
+    
+    case IntType::UINT8: 
+        *(uint8_t*)item->value += *(uint8_t*)item->step;
+        if (*(uint8_t*)item->value > *(uint8_t*)item->maxValue) {
+            *(uint8_t*)item->value = *(uint8_t*)item->maxValue;
+        }
+        break;
+        
+    case IntType::INT8: 
+        *(int8_t*)item->value += *(int8_t*)item->step;
+        if (*(int8_t*)item->value > *(int8_t*)item->maxValue) {
+            *(int8_t*)item->value = *(int8_t*)item->maxValue;
+        }
+        break;
     }
-    *(int*)item->value = newValue;
 }
 
 void decreaseInt(MenuItem *item) {
-    int newValue = *(int*)item->value - *(int*)item->step;
-    if (newValue < *(int*)item->minValue) {
-        newValue = *(int*)item->minValue;
+    uint8_t _intType = item->intType;
+    switch (_intType) {
+    case IntType::INT32: 
+        *(int*)item->value -= *(int*)item->step;
+        if (*(int*)item->value < *(int*)item->minValue) {
+            *(int*)item->value = *(int*)item->minValue;
+        }
+        break;
+    
+    case IntType::UINT8: 
+        *(uint8_t*)item->value -= *(uint8_t*)item->step;
+        if (*(uint8_t*)item->value < *(uint8_t*)item->minValue) {
+            *(uint8_t*)item->value = *(uint8_t*)item->minValue;
+        }
+        break;
+        
+    case IntType::INT8: 
+        *(int8_t*)item->value -= *(int8_t*)item->step;
+        if (*(int8_t*)item->value < *(int8_t*)item->minValue) {
+            *(int8_t*)item->value = *(int8_t*)item->minValue;
+        }
+        break;
     }
-    *(int*)item->value = newValue;
 }
 
 void increaseFloat(MenuItem *item) {
@@ -213,9 +250,6 @@ Menu::~Menu(){
     }
     delete[] items;
     items = nullptr;
-    if (selectedItem) {
-        delete selectedItem;
-    }
 }
 
 ClockMenu::ClockMenu() : ClockMenu::ClockMenu(nullptr) {
@@ -281,23 +315,23 @@ void handleRightBtn(Menu *menu) {
 
 void handleLeftBtn(Menu *menu) {
     switch (menu->selectedItem->type) {
-        case ItemType::ITEM_T_INT:
+    case ItemType::ITEM_T_INT:
         decreaseInt(menu->selectedItem);
         break;
         
-        case ItemType::ITEM_T_FLOAT:
+    case ItemType::ITEM_T_FLOAT:
         decreaseFloat(menu->selectedItem);
         break;
 
-        case ItemType::ITEM_T_BOOL:
+    case ItemType::ITEM_T_BOOL:
         changeBool(menu->selectedItem);
         break;
 
-        case ItemType::ITEM_T_LIST:
+    case ItemType::ITEM_T_LIST:
         previousList(menu->selectedItem);
         break;
 
-        default:
+    default:
         break;
     }
 }
@@ -306,8 +340,30 @@ void printValue(MenuItem* item) {
     ItemType _type = item->type;
     switch (_type) {
     case ITEM_T_INT: {
-        int value = *(int*)item->value;
-        menu_display->print(value);
+        IntType _intType = item->intType;
+        switch (_intType) {
+        case IntType::INT32: {
+            int value = *(int*)item->value;
+            menu_display->print(value);
+            break;
+        }
+
+        case IntType::UINT8: {
+            uint8_t value = *(uint8_t*)item->value;
+            if (value == 0) {
+                menu_display->print("0");
+                break;
+            }
+            menu_display->print(value);
+            break;
+        }
+
+        case IntType::INT8: {
+            int8_t value = *(int8_t*)item->value;
+            menu_display->print(value);
+            break;
+        }
+        }
         break;
     }
     case ITEM_T_FLOAT: {
@@ -650,7 +706,7 @@ void Menu::add(const char *name, Menu *submenu) {
 
 void Menu::add(MenuItem* item) {
     itemNo++;
-    if (itemNo >= capacity) {
+    if (itemNo > capacity) {
         if (capacity == 0) {
             capacity = 1;
         }
@@ -660,13 +716,11 @@ void Menu::add(MenuItem* item) {
         MenuItem** newItems = new MenuItem*[capacity];
         memset(newItems, 0, sizeof(MenuItem*) * capacity);
         if (items) {
-            memcpy(newItems, items, sizeof(MenuItem*) * capacity);
+            memcpy(newItems, items, sizeof(MenuItem*) * capacity/2);
             delete[] items;
         }
         items = newItems;  
-        if (!selectedItem) {
-            selectedItem = items[0];
-        }
+        selectedItem = items[0];
     }
     items[itemNo-1] = item;
 }
