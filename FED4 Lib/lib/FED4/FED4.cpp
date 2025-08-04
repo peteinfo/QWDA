@@ -825,7 +825,7 @@ bool FED4::checkFRCondition() {
 
     case ActiveSensor::RIGHT:
         if(getRightPoke() && rightPokeCount %ratio == 0) {
-            _reward = _right_poke;
+            _reward = rightReward;
             conditionMet = true;
         }
         break;
@@ -951,19 +951,18 @@ void FED4::setLightCue() {
         switch (activeSensor) {
         case ActiveSensor::BOTH:
             strip.setPixelColor(8, 5, 2, 0, 0);
-            strip.setPixelColor(9, 5, 2, 0, 0);
-            strip.setPixelColor(0, 0, 0, 0);
             break;
         
         case ActiveSensor::LEFT:
             strip.setPixelColor(9, 5, 2, 0, 0);
-            strip.setPixelColor(0,0,0,0);
             break;
 
         case ActiveSensor::RIGHT:
             strip.setPixelColor(8, 5, 2, 0, 0);
             break;
         }
+
+        strip.setPixelColor(0, 0, 0, 0, 0);
 
         strip.show();
     } else {
@@ -1218,6 +1217,7 @@ void FED4::alarm_handler() {
         }
         
         updateDisplay(true);
+        setLightCue();
         flush_to_sd();
         
         uint8_t alarmSeconds = rtcZero.getSeconds() + LP_AWAKE_PERIOD - 1;
