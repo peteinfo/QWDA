@@ -877,7 +877,7 @@ bool FED4::checkVICondition() {
                 _reward = leftReward;
             }
             else if (pokedRight) {
-                _reward = _right_poke;
+                _reward = rightReward;
             }
 
             Event e = Event {
