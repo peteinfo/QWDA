@@ -71,6 +71,12 @@ void FED4::begin() {
     
     loadConfig();
     
+    if (PM->RCAUSE.reg & PM_RCAUSE_WDT) {
+        wtd_restart();
+        displayLayout();
+        return;
+    }
+    
     menu_display = &display;
     menu_rtc = &rtc;
     runConfigMenu();
@@ -92,18 +98,14 @@ void FED4::begin() {
     }
     
     saveConfig();
-    
-    ignorePokes = true;
-    
-    initLogFile(); 
     displayLayout();
     
-    ignorePokes = false;
+    watch_dog.setup(_wtd_timeout);
 }
 
 void FED4::run() {
     setLightCue();
-    
+
     updateDisplay();    
     
     if (checkCondition()) {
@@ -113,6 +115,8 @@ void FED4::run() {
     if (!checkFeedingWindow()) {
         sleep();
     }
+
+    watch_dog.clear();
 }
 
 void FED4::sleep() {
@@ -1132,20 +1136,35 @@ void FED4::write_to_log(char row[ROW_MAX_LEN], bool forceFlush) {
 }
 
 void FED4::start_interrupts() {
-    noInterrupts();
-
-    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::LFT_POKE));
-    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::RGT_POKE));
-    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::WELL));
-    rtcZero.attachInterrupt(alarm_ISR);
-    __DSB();
+    NVIC_DisableIRQ(EIC_IRQn);
     
-    interrupts();
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE), left_poke_IRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE), right_poke_IRS, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), well_ISR, CHANGE);
+    
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::LFT_POKE)) 
+        | (1 << digitalPinToInterrupt(FED4Pins::RGT_POKE))
+        | (1 << digitalPinToInterrupt(FED4Pins::WELL));
+
+    
+    rtcZero.attachInterrupt(alarm_ISR);
+
+    __DSB();
+    NVIC_EnableIRQ(EIC_IRQn);
+
+    _interrupt_enabled;
 }
 
 void FED4::pause_interrupts() {
-    noInterrupts();
+    NVIC_DisableIRQ(EIC_IRQn);
+
+    detachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE));
+    detachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE));
+    detachInterrupt(digitalPinToInterrupt(FED4Pins::WELL));
+    
     rtcZero.detachInterrupt();
+
+    NVIC_EnableIRQ(EIC_IRQn);
 }
 
 void FED4::left_poke_handler() {
@@ -1219,6 +1238,8 @@ void FED4::alarm_handler() {
         updateDisplay(true);
         setLightCue();
         flush_to_sd();
+
+        pause_interrupts();
         
         uint8_t alarmSeconds = rtcZero.getSeconds() + LP_AWAKE_PERIOD - 1;
         uint8_t alarmMinutes = rtcZero.getMinutes() + (alarmSeconds / 60);
@@ -1228,6 +1249,8 @@ void FED4::alarm_handler() {
         alarmHours = alarmHours % 24;
         rtcZero.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
         
+        watch_dog.clear();
+
         start_interrupts();
     }
 }
@@ -1273,4 +1296,140 @@ void FED4::dateTime(uint16_t *date, uint16_t *time) {
     DateTime now = instance->getDateTime();
     *date = FAT_DATE(now.year(), now.month(), now.day());
     *time = FAT_TIME(now.hour(), now.minute(), now.second());
+}
+
+void FED4::wtd_shut_down() {
+    if(instance) {
+        instance->logFile.close();
+    }
+}
+
+void  FED4::wtd_restart() {
+    pause_interrupts();
+
+    // FatFile root;
+    // root.open("/", O_READ);
+    // root.rewind();
+
+    // char latestName[30] = "";
+    // uint16_t latestTime = 0;
+    // uint16_t latestDate = 0;
+
+    // SdFile file;
+    // while (file.openNext(&root, O_READ)) {
+    //     uint16_t date, time;
+    //     char name[30] = "";
+    //     file.getModifyDateTime(&date, &time);
+    //     file.getName(name, 30);
+    //     if (
+    //         ( date > latestDate 
+    //         || (date == latestDate && time > latestTime) )
+    //         && name[0] == 'F' && name[1] == 'E' && name[2] == 'D'
+    //     ) {
+    //         latestDate = date;
+    //         latestTime = time;
+    //         strncpy(latestName, name, 30);
+    //     }
+    //     file.close();
+    // }
+
+    // logFile.open(latestName, FILE_WRITE);
+
+    // char lastRow[500] = "";
+    // uint32_t pos;
+    // uint32_t endPos;
+    // uint8_t rowLength;
+
+    // bool foundEnd = false;
+    // bool foundStart = false;
+
+    // logFile.seekEnd();
+    // logFile.seekCur(-1);
+    // if (logFile.read() == '\n') { // get rid of trailing new lines
+    //     logFile.seekCur(-1);
+    // }
+
+    // while(!foundStart) {
+    //     logFile.seekCur(-2);
+    //     if (logFile.curPosition() == 0) {
+    //         break;
+    //     }
+    //     char c = logFile.read();
+    //     if (c == '\n') {
+    //         if (!foundEnd) {
+    //             endPos = logFile.curPosition();
+    //             foundEnd = true;
+    //         }
+    //         else {
+    //             pos = logFile.curPosition();
+    //             foundStart = true;
+    //         }
+    //     }
+    // }
+    // rowLength = endPos - pos;
+    // logFile.read(lastRow, rowLength);
+    // logFile.seekEnd();
+
+    // uint8_t idx = 0;
+    // pos = 0;
+    // char leftPoke_str[8] = "";
+    // char rightPoke_str[8] = "";
+    // char pellets_str[8] = "";
+    // for (pos = 0; pos < rowLength; pos++) {
+    //     if (lastRow[pos] == ',') {
+    //         idx ++;
+    //     }
+    //     if (idx == 8) {
+    //         strncpy(leftPoke_str, lastRow + pos+2, 8);
+    //     }
+    //     if (idx == 9) {
+    //         strncpy(rightPoke_str, lastRow + pos+2, 8);
+    //     }
+    //     if (idx == 10) {
+    //         strncpy(pellets_str, lastRow + pos+2, 8);
+    //     }
+    // }
+
+    // uint16_t leftPokes = 0;
+    // for (uint8_t i = 0; i < 8; i++) {
+    //     if (leftPoke_str[i] == ',' || leftPoke_str[i] == '\n') {
+    //         break;
+    //     }
+    //     leftPokes = leftPokes * 10 + leftPoke_str[i] - '0';
+    // }
+    // uint16_t rightPokes = 0;
+    // for (uint8_t i = 0; i < 8; i++) {
+    //     if (rightPoke_str[i] == ',' || rightPoke_str[i] == '\n') {
+    //         break;
+    //     }
+    //     rightPokes = rightPokes * 10 + rightPoke_str[i] - '0';
+    // }
+    // uint16_t pellets = 0;
+    // for (uint8_t i = 0; i < 8; i++) {
+    //     if (pellets_str[i] == ',' || pellets_str[i] == '\n') {
+    //         break;
+    //     }
+    //     pellets = pellets * 10 + pellets_str[i] - '0';
+    // }
+    
+    // leftPokeCount = leftPokes;
+    // rightPokeCount = rightPokes;
+    // pelletsDispensed = pellets;
+
+    
+    // // while(1) {
+        // //     __delay(1);
+        // // }
+        
+    initLogFile();
+    Event event = {
+        time: getDateTime(),
+        message: EventMsg::WTD_RTS
+    };
+    logEvent(event);
+
+    // makeNoise();
+
+    watch_dog.setup(_wtd_timeout);
+    start_interrupts();
 }

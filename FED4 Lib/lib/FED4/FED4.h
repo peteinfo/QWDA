@@ -2,6 +2,7 @@
 #define FED4_H
 
 #include <Arduino.h>
+#include <sam.h>
 #include <functional>
 
 #include <Adafruit_NeoPixel.h>
@@ -11,6 +12,7 @@
 #include <RTCZero.h>
 #include <SdFat.h>
 #include <Stepper.h>
+#include <WDTZero.h>
 
 #include "Menu.h"
 
@@ -62,13 +64,14 @@ namespace ActiveSensor {
  
 
 namespace EventMsg {
-    constexpr const  char* LEFT     = "Left Poke";
-    constexpr const  char* RIGHT    = "Right Poke";
-    constexpr const  char* PEL      = "Dropped Pellet";
-    constexpr const  char* WELL     = "Well Cleared";
-    constexpr const  char* SET_VI   = "Set VI";
-    constexpr const  char* RESET    = "Reset Device";
-    constexpr const  char* NONE     = "";
+    constexpr const char* LEFT     = "Left Poke";
+    constexpr const char* RIGHT    = "Right Poke";
+    constexpr const char* PEL      = "Dropped Pellet";
+    constexpr const char* WELL     = "Well Cleared";
+    constexpr const char* SET_VI   = "Set VI";
+    constexpr const char* RESET    = "Reset Device";
+    constexpr const char* WTD_RTS  = "WatchDog Reset Device";
+    constexpr const char* NONE     = "";
 }
 
 struct Event {
@@ -96,6 +99,8 @@ class FED4 {
         ),
         strip(10, FED4Pins::NEOPXL, NEO_GRBW + NEO_KHZ800) 
     {
+        watch_dog.attachShutdown(wtd_shut_down);
+
         rtc.begin();
         if (rtc.lostPower()) {
             rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -197,8 +202,8 @@ class FED4 {
     
     DateTime getDateTime();
     int getBatteryPercentage();
-
-private:
+    
+    private:
     // ==== InternalFlags ====
     volatile bool _sleep_mode     = false;
     
@@ -207,9 +212,8 @@ private:
     volatile bool _pellet_dropped = false;
     volatile bool _pellet_in_well = false;
     
-    bool _jam_error               = false;
-    bool _sd_error                = false;
-
+    volatile bool _jam_error      = false;
+    
     // Timing
     volatile bool _left_poke_started      = false;
     volatile bool _right_poke_started     = false;
@@ -217,36 +221,44 @@ private:
     volatile unsigned long _startT_right_poke    = 0;
     volatile unsigned long _dT_left_poke         = 0;
     volatile unsigned long _dT_right_poke        = 0;
-
+    
     
     // ==== Internal State ====
     int _reward;
-
+    
     // Log Memory
     size_t _log_buffer_pos = 0;
     char _log_buffer[FILE_RAM_BUFF_SIZE];
     unsigned long _last_flush = 0;
     void write_to_log(char row[ROW_MAX_LEN], bool forceFlush=false);
     void flush_to_sd();
-
-
+    
+    
     // ==== Interrupts ====
+    volatile bool _interrupt_enabled = true;
     void start_interrupts();
     void pause_interrupts();
-
+    
     void left_poke_handler();
     void right_poke_handler();
     void alarm_handler();
     void well_handler();
-
+    
     // Static Interrupt Service Routinesd
     static void left_poke_IRS();
     static void right_poke_IRS();
     static void well_ISR();
     static void alarm_ISR();
-
+    
     // SD File CallBack
     static void dateTime(uint16_t* date, uint16_t* time);
+    
+    
+    // ==== Watch Dog ====
+    WDTZero watch_dog;
+    uint32_t _wtd_timeout = WDT_SOFTCYCLE4M;
+    static void wtd_shut_down();
+    void wtd_restart();
 };
 
 #endif
