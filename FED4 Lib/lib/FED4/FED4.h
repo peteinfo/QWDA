@@ -2,8 +2,8 @@
 #define FED4_H
 
 #include <Arduino.h>
-#include <sam.h>
 #include <functional>
+#include <string>
 
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_SharpMem.h>
