@@ -1307,6 +1307,8 @@ void FED4::wtd_shut_down() {
 void  FED4::wtd_restart() {
     pause_interrupts();
 
+    watch_dog.setup(_wtd_timeout);
+
     FatFile root;
     root.open("/", O_READ);
     root.rewind();
@@ -1435,8 +1437,5 @@ void  FED4::wtd_restart() {
     logEvent(event);
     flush_to_sd();
 
-    makeNoise();
-
-    watch_dog.setup(_wtd_timeout);
     start_interrupts();
 }
