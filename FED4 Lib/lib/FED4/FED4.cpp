@@ -71,11 +71,11 @@ void FED4::begin() {
     
     loadConfig();
     
-    // if (PM->RCAUSE.reg & PM_RCAUSE_WDT) {
+    if (PM->RCAUSE.reg & PM_RCAUSE_WDT) {
         wtd_restart();
         displayLayout();
         return;
-    // }
+    }
     
     menu_display = &display;
     menu_rtc = &rtc;
@@ -1256,7 +1256,7 @@ void FED4::alarm_handler() {
         alarmHours = alarmHours % 24;
         rtcZero.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
         
-        // watch_dog.clear();
+        watch_dog.clear();
 
         start_interrupts();
     }
@@ -1311,7 +1311,7 @@ void FED4::wtd_shut_down() {
 void  FED4::wtd_restart() {
     pause_interrupts();
 
-    // watch_dog.setup(_wtd_timeout);
+    watch_dog.setup(_wtd_timeout);
 
     FatFile root;
     root.open("/", O_READ);
