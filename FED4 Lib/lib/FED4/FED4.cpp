@@ -71,11 +71,11 @@ void FED4::begin() {
     
     loadConfig();
     
-    if (PM->RCAUSE.reg & PM_RCAUSE_WDT) {
+    // if (PM->RCAUSE.reg & PM_RCAUSE_WDT) {
         wtd_restart();
         displayLayout();
         return;
-    }
+    // }
     
     menu_display = &display;
     menu_rtc = &rtc;
@@ -376,38 +376,42 @@ void FED4::initLogFile() {
     logFile.createContiguous(fileName, FILE_PREALLOC_SIZE);
     logFile.rewind();
 
-    logFile.print("TimeStamp,");
-    logFile.print("Bat V,");
-    logFile.print("Device Number,");
-    logFile.print("Mode,");
-    logFile.print("Event,");
-    logFile.print("Active Sensor,");
-    logFile.print("Left Reward,");
-    logFile.print("Right Reward,");
-    logFile.print("Left Poke Count,");
-    logFile.print("Right Poke Count,");
-    logFile.print("Pellet Count");
+    char header[500] = "";
+    strcat(header, "TimeStamp,");
+    strcat(header, "Bat V,");
+    strcat(header, "Device Number,");
+    strcat(header, "Mode,");
+    strcat(header, "Event,");
+    strcat(header, "Active Sensor,");
+    strcat(header, "Left Reward,");
+    strcat(header, "Right Reward,");
+    strcat(header, "Left Poke Count,");
+    strcat(header, "Right Poke Count,");
+    strcat(header, "Pellet Count,");
 
     switch (mode) {
     case Mode::VI:
-        logFile.print(",VI Count Down");
+        strcat(header, ",VI Count Down");
         break;
 
     case Mode::FR:
-        logFile.print(",Ratio");
+        strcat(header, ",Ratio");
         break;
 
     case Mode::CHANCE:
-        logFile.print(",Chance");
+        strcat(header, ",Chance");
         break;
     
     default:
         break;
     }
 
-    logFile.print("\n");
+    strcat(header, "\n");
 
+    pause_interrupts();
+    logFile.print(header);
     logFile.flush();
+    start_interrupts();
 }
 
 void FED4::logEvent(Event e) {
@@ -1252,7 +1256,7 @@ void FED4::alarm_handler() {
         alarmHours = alarmHours % 24;
         rtcZero.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
         
-        watch_dog.clear();
+        // watch_dog.clear();
 
         start_interrupts();
     }
@@ -1300,14 +1304,14 @@ void FED4::dateTime(uint16_t *date, uint16_t *time) {
 
 void FED4::wtd_shut_down() {
     if(instance) {
-        instance->flush_to_sd();
+        // instance->flush_to_sd();
     }
 }
 
 void  FED4::wtd_restart() {
     pause_interrupts();
 
-    watch_dog.setup(_wtd_timeout);
+    // watch_dog.setup(_wtd_timeout);
 
     FatFile root;
     root.open("/", O_READ);
@@ -1374,24 +1378,29 @@ void  FED4::wtd_restart() {
     }
     
     char lastRow[500] = "";
+
+    logFile.seekEnd(-1);
+    char c = logFile.read();
+    while (c == '\n') {
+        logFile.seekCur(-2);
+        c = logFile.read();
+    }
+    logFile.truncate(logFile.curPosition());
     
-    if ((int)logFile.curPosition() - 1000 < 0) {
+    if ((int)logFile.fileSize() - 1000 < 0) {
         logFile.seekSet(0);
     } else {
         logFile.seekEnd(-1000);
     }
-    char endRows[1000];
+    char endRows[1001];
+    memset(endRows, 0, 1001);
+    
     logFile.read(endRows, 1000);
-    char *lastRowPtr = nullptr;
-    char *canaryPtr = strtok(endRows, "\n");
-    while (canaryPtr != nullptr) {
-        lastRowPtr = canaryPtr;
-        canaryPtr = strtok(nullptr, "\n");
-        if (strlen(canaryPtr) < 10) {
-            canaryPtr = nullptr;
-        }
+    int pos = strlen(endRows) - 1;
+    while(endRows[pos] != '\n') {
+        pos --;
     }
-    strcpy(lastRow, lastRowPtr);
+    strncpy(lastRow, endRows + pos + 1, 500);
 
     uint16_t leftPokes = 0;
     uint16_t rightPokes = 0;
@@ -1416,19 +1425,11 @@ void  FED4::wtd_restart() {
     }
 
     logFile.seekEnd();
+    logFile.print("\n");
     
     leftPokeCount = leftPokes;
     rightPokeCount = rightPokes;
     pelletsDispensed = pellets;
-
-    logFile.seekEnd(-1);
-    char c = logFile.read();
-    while (c == '\n') {
-        logFile.seekCur(-2);
-        c = logFile.read();
-    }
-    logFile.write('\n');
-    logFile.truncate(logFile.curPosition());
 
     Event event = {
         time: getDateTime(),
