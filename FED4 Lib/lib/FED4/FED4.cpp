@@ -71,6 +71,12 @@ void FED4::begin() {
     
     loadConfig();
     
+    if (PM->RCAUSE.reg & PM_RCAUSE_WDT) {
+        wtd_restart();
+        displayLayout();
+        return;
+    }
+    
     menu_display = &display;
     menu_rtc = &rtc;
     runConfigMenu();
@@ -90,20 +96,18 @@ void FED4::begin() {
     default:
         break;
     }
+
+    initLogFile();
     
     saveConfig();
-    
-    ignorePokes = true;
-    
-    initLogFile(); 
     displayLayout();
     
-    ignorePokes = false;
+    watch_dog.setup(_wtd_timeout);
 }
 
 void FED4::run() {
     setLightCue();
-    
+
     updateDisplay();    
     
     if (checkCondition()) {
@@ -113,6 +117,8 @@ void FED4::run() {
     if (!checkFeedingWindow()) {
         sleep();
     }
+
+    watch_dog.clear();
 }
 
 void FED4::sleep() {
@@ -370,38 +376,42 @@ void FED4::initLogFile() {
     logFile.createContiguous(fileName, FILE_PREALLOC_SIZE);
     logFile.rewind();
 
-    logFile.print("TimeStamp,");
-    logFile.print("Bat V,");
-    logFile.print("Device Number,");
-    logFile.print("Mode,");
-    logFile.print("Event,");
-    logFile.print("Active Sensor,");
-    logFile.print("Left Reward,");
-    logFile.print("Right Reward,");
-    logFile.print("Left Poke Count,");
-    logFile.print("Right Poke Count,");
-    logFile.print("Pellet Count");
+    char header[500] = "";
+    strcat(header, "TimeStamp,");
+    strcat(header, "Bat V,");
+    strcat(header, "Device Number,");
+    strcat(header, "Mode,");
+    strcat(header, "Event,");
+    strcat(header, "Active Sensor,");
+    strcat(header, "Left Reward,");
+    strcat(header, "Right Reward,");
+    strcat(header, "Left Poke Count,");
+    strcat(header, "Right Poke Count,");
+    strcat(header, "Pellet Count,");
 
     switch (mode) {
     case Mode::VI:
-        logFile.print(",VI Count Down");
+        strcat(header, ",VI Count Down");
         break;
 
     case Mode::FR:
-        logFile.print(",Ratio");
+        strcat(header, ",Ratio");
         break;
 
     case Mode::CHANCE:
-        logFile.print(",Chance");
+        strcat(header, ",Chance");
         break;
     
     default:
         break;
     }
 
-    logFile.print("\n");
+    strcat(header, "\n");
 
+    pause_interrupts();
+    logFile.print(header);
     logFile.flush();
+    start_interrupts();
 }
 
 void FED4::logEvent(Event e) {
@@ -451,6 +461,7 @@ void FED4::logEvent(Event e) {
         sprintf(mode_str, "OTHER");
         break;
     }
+    strcat(row, mode_str);
     strcat(row, ",");
 
     strcat(row, e.message);
@@ -1132,19 +1143,18 @@ void FED4::write_to_log(char row[ROW_MAX_LEN], bool forceFlush) {
 }
 
 void FED4::start_interrupts() {
-    noInterrupts();
-
+    NVIC_DisableIRQ(EIC_IRQn);
+    
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::LFT_POKE));
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::RGT_POKE));
     EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::WELL));
     rtcZero.attachInterrupt(alarm_ISR);
     __DSB();
-    
-    interrupts();
+    NVIC_EnableIRQ(EIC_IRQn);
 }
 
 void FED4::pause_interrupts() {
-    noInterrupts();
+    NVIC_DisableIRQ(EIC_IRQn);
     rtcZero.detachInterrupt();
 }
 
@@ -1219,6 +1229,8 @@ void FED4::alarm_handler() {
         updateDisplay(true);
         setLightCue();
         flush_to_sd();
+
+        pause_interrupts();
         
         uint8_t alarmSeconds = rtcZero.getSeconds() + LP_AWAKE_PERIOD - 1;
         uint8_t alarmMinutes = rtcZero.getMinutes() + (alarmSeconds / 60);
@@ -1228,6 +1240,8 @@ void FED4::alarm_handler() {
         alarmHours = alarmHours % 24;
         rtcZero.setAlarmTime(alarmHours, alarmMinutes, alarmSeconds);
         
+        watch_dog.clear();
+
         start_interrupts();
     }
 }
@@ -1273,4 +1287,143 @@ void FED4::dateTime(uint16_t *date, uint16_t *time) {
     DateTime now = instance->getDateTime();
     *date = FAT_DATE(now.year(), now.month(), now.day());
     *time = FAT_TIME(now.hour(), now.minute(), now.second());
+}
+
+void FED4::wtd_shut_down() {
+    if(instance) {
+        // instance->flush_to_sd();
+    }
+}
+
+void  FED4::wtd_restart() {
+    pause_interrupts();
+
+    watch_dog.setup(_wtd_timeout);
+
+    FatFile root;
+    root.open("/", O_READ);
+    root.rewind();
+
+    char latestName[30] = "";
+    uint16_t latestTime = 0;
+    uint16_t latestDate = 0;
+
+    SdFile file;
+    while (file.openNext(&root, O_READ)) {
+        uint16_t date, time;
+        char name[30] = "";
+        file.getModifyDateTime(&date, &time);
+        file.getName(name, 30);
+        if (
+            ( date > latestDate 
+            || (date == latestDate && time > latestTime) )
+            && strncmp(name, "FED", 3) == 0
+        ) {
+            latestDate = date;
+            latestTime = time;
+            strncpy(latestName, name, 30);
+        }
+        file.close();
+    }
+
+    if (!logFile.open(latestName, O_RDWR | O_AT_END) || strlen(latestName) == 0) {
+        initLogFile();
+        Event event = {
+            time: getDateTime(),
+            message: EventMsg::WTD_RTS
+        };
+        logEvent(event);
+        flush_to_sd();
+        start_interrupts();
+        return;
+    }
+
+    char header[500] = "";
+
+    logFile.seekSet(0);
+    logFile.read(header, 500);
+    
+    uint8_t leftPoke_idx = 0;
+    uint8_t rightPoke_idx = 0;
+    uint8_t pellets_idx = 0;
+    
+    char* headerPtr = strtok(header, "\n"); 
+    char *column = strtok(headerPtr, ",");
+    uint8_t columnIdx = 0;
+    while (column != nullptr) {
+        if (strcmp(column, "Left Poke Count") == 0) {
+            leftPoke_idx = columnIdx;
+        }
+        else if (strcmp(column, "Right Poke Count") == 0) {
+            rightPoke_idx = columnIdx;
+        }
+        else if (strcmp(column, "Pellet Count") == 0) {
+            pellets_idx = columnIdx;
+        }
+        columnIdx++;
+        column = strtok(nullptr, ",");
+    }
+    
+    char lastRow[500] = "";
+
+    logFile.seekEnd(-1);
+    char c = logFile.read();
+    while (c == '\n') {
+        logFile.seekCur(-2);
+        c = logFile.read();
+    }
+    logFile.truncate(logFile.curPosition());
+    
+    if ((int)logFile.fileSize() - 1000 < 0) {
+        logFile.seekSet(0);
+    } else {
+        logFile.seekEnd(-1000);
+    }
+    char endRows[1001];
+    memset(endRows, 0, 1001);
+    
+    logFile.read(endRows, 1000);
+    int pos = strlen(endRows) - 1;
+    while(endRows[pos] != '\n') {
+        pos --;
+    }
+    strncpy(lastRow, endRows + pos + 1, 500);
+
+    uint16_t leftPokes = 0;
+    uint16_t rightPokes = 0;
+    uint16_t pellets = 0;
+
+    if (strncmp(lastRow, header, strlen(lastRow)) != 0) {
+        int8_t idx = 0;
+        char *token = strtok(lastRow, ",");
+        while (token != nullptr) {
+            if (idx == leftPoke_idx) {
+                leftPokes = atoi(token);
+            }
+            else if (idx == rightPoke_idx) {
+                rightPokes = atoi(token);
+            }
+            else if (idx == pellets_idx) {
+                pellets = atoi(token);
+            }
+            idx++;
+            token = strtok(nullptr, ",");
+        }
+    }
+
+    logFile.seekEnd();
+    logFile.print("\n");
+    
+    leftPokeCount = leftPokes;
+    rightPokeCount = rightPokes;
+    pelletsDispensed = pellets;
+
+    Event event = {
+        time: getDateTime(),
+        message: EventMsg::WTD_RTS
+    };
+    logEvent(event);
+    flush_to_sd();
+
+    start_interrupts();
 }
