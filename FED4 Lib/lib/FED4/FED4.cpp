@@ -1145,33 +1145,17 @@ void FED4::write_to_log(char row[ROW_MAX_LEN], bool forceFlush) {
 void FED4::start_interrupts() {
     NVIC_DisableIRQ(EIC_IRQn);
     
-    attachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE), left_poke_IRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE), right_poke_IRS, CHANGE);
-    attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), well_ISR, CHANGE);
-    
-    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::LFT_POKE)) 
-        | (1 << digitalPinToInterrupt(FED4Pins::RGT_POKE))
-        | (1 << digitalPinToInterrupt(FED4Pins::WELL));
-
-    
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::LFT_POKE));
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::RGT_POKE));
+    EIC->INTFLAG.reg = (1 << digitalPinToInterrupt(FED4Pins::WELL));
     rtcZero.attachInterrupt(alarm_ISR);
-
     __DSB();
     NVIC_EnableIRQ(EIC_IRQn);
-
-    _interrupt_enabled;
 }
 
 void FED4::pause_interrupts() {
     NVIC_DisableIRQ(EIC_IRQn);
-
-    detachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE));
-    detachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE));
-    detachInterrupt(digitalPinToInterrupt(FED4Pins::WELL));
-    
     rtcZero.detachInterrupt();
-
-    NVIC_EnableIRQ(EIC_IRQn);
 }
 
 void FED4::left_poke_handler() {
@@ -1294,6 +1278,9 @@ void FED4::well_ISR() {
 }
 
 void FED4::alarm_ISR() {
+    if (instance) {
+        instance->alarm_handler();
+    }
 }
 
 void FED4::dateTime(uint16_t *date, uint16_t *time) {
