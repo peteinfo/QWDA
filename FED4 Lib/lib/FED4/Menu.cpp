@@ -388,6 +388,12 @@ void printValue(MenuItem* item) {
         break;
     }
     case ITEM_T_SUBMENU: {
+        if(item->submenu->type == MENU_T_CLOCK) {
+            DateTime now = menu_rtc->now();
+            menu_display->print(now.hour());
+            menu_display->print(":");
+            menu_display->print(now.minute());
+        }
         menu_display->print(">");
         break;
     }

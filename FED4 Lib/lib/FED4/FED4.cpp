@@ -202,6 +202,7 @@ void FED4::loadConfig() {
     deserializeJson(config, configFile);
     
     deviceNumber = config["device number"]; 
+    animal = config["animal"];
 
     if (config["mode"]["name"] == "FR") {
         mode = Mode::FR;
@@ -242,6 +243,7 @@ void FED4::saveConfig() {
     JsonDocument config;
 
     config["device number"] = deviceNumber;
+    config["animal"] = animal;
 
     switch (mode) {
     case Mode::FR:
@@ -378,16 +380,20 @@ void FED4::initLogFile() {
 
     char header[500] = "";
     strcat(header, "TimeStamp,");
-    strcat(header, "Bat V,");
     strcat(header, "Device Number,");
+    strcat(header, "Animal,");
     strcat(header, "Mode,");
+    strcat(header, "Window Start,");
+    strcat(header, "Window End,");
+    strcat(header, "In Window,");
     strcat(header, "Event,");
     strcat(header, "Active Sensor,");
     strcat(header, "Left Reward,");
     strcat(header, "Right Reward,");
     strcat(header, "Left Poke Count,");
     strcat(header, "Right Poke Count,");
-    strcat(header, "Pellet Count,");
+    strcat(header, "Pellet Count");
+
 
     switch (mode) {
     case Mode::VI:
@@ -425,22 +431,15 @@ void FED4::logEvent(Event e) {
     strcat(row, date);
     strcat(row, time);
     strcat(row, ",");
-
-    char battery_str[8];
-    pause_interrupts();
-    analogReadResolution(10);
-    float batteryVoltage = analogRead(FED4Pins::VBAT);
-    start_interrupts();
-    batteryVoltage *= 2;
-    batteryVoltage *= 3.3;
-    batteryVoltage /= 1024;
-    snprintf(battery_str, sizeof(battery_str), "%.2f", batteryVoltage);
-    strcat(row, battery_str);
-    strcat(row, ",");
     
     char deviceNumber_str[8];
     snprintf(deviceNumber_str, sizeof(deviceNumber_str), "%d", deviceNumber%100);
     strcat(row, deviceNumber_str);
+    strcat(row, ",");
+
+    char animal_str[8];
+    sniprintf(animal_str, sizeof(animal_str), "%d", animal);
+    strcat(row, animal_str);
     strcat(row, ",");
 
     char mode_str[10];
@@ -463,6 +462,29 @@ void FED4::logEvent(Event e) {
     }
     strcat(row, mode_str);
     strcat(row, ",");
+
+    if (feedWindow) {
+        char window_start_str[8];
+        char window_end_str[8];
+        char in_window_str[4];
+        sprintf(window_start_str, "%d", windowStart);
+        sprintf(window_end_str, "%d", windowEnd);
+        if (checkFeedingWindow()) {
+            sprintf(in_window_str, "1");
+        }
+        else {
+            sprintf(in_window_str, "0");
+        }
+        strcat(row, window_start_str);
+        strcat(row, ",");
+        strcat(row, window_end_str);
+        strcat(row, ",");
+        strcat(row, in_window_str);
+        strcat(row, ",");
+    }
+    else {
+        strcat(row, "null,null,null,");
+    }
 
     strcat(row, e.message);
     strcat(row, ",");
@@ -489,11 +511,11 @@ void FED4::logEvent(Event e) {
     switch (activeSensor) {
     case ActiveSensor::LEFT:
         snprintf(leftReward_str, sizeof(leftReward_str), "%d", leftReward);
-        snprintf(rightReward_str, sizeof(rightReward_str), "nan");
+        snprintf(rightReward_str, sizeof(rightReward_str), "null");
         break;
         
     case ActiveSensor::RIGHT:
-        snprintf(leftReward_str, sizeof(leftReward_str), "nan");
+        snprintf(leftReward_str, sizeof(leftReward_str), "null");
         snprintf(rightReward_str, sizeof(rightReward_str), "%d", rightReward);
         break;
         
@@ -522,23 +544,23 @@ void FED4::logEvent(Event e) {
     
     switch (mode) {
     case Mode::VI:
-        strcat(row, ",");
         char viCountDown_str[10];
         sprintf(viCountDown_str, "%d", viCountDown);
+        strcat(row, ",");
         strcat(row, viCountDown_str);
         break;
 
     case Mode::FR:
-        strcat(row, ",");
         char ratio_str[10];
         sprintf(ratio_str, "%d", ratio);
+        strcat(row, ",");
         strcat(row, ratio_str);
         break;
 
     case Mode::CHANCE:
-        strcat(row, ",");
         char chance_str[8];
         sprintf(chance_str, "%.2f", chance);
+        strcat(row, ",");
         strcat(row, chance_str);
         break;
     
@@ -727,7 +749,7 @@ void FED4::runConfigMenu() {
     Menu configMenu = Menu();
 
     configMenu.add("Time", new ClockMenu());
-    configMenu.add("Dev no", &deviceNumber, 0, 99, 1);
+    configMenu.add("Animal", &animal, 0, 99, 1);
 
     const char* modes[] = {"FR", "VI", "%"};
     configMenu.add("Mode", &mode, modes, 3);
