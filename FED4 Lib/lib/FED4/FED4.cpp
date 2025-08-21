@@ -378,8 +378,8 @@ void FED4::initLogFile() {
 
     char header[500] = "";
     strcat(header, "TimeStamp,");
-    strcat(header, "Bat V,");
     strcat(header, "Device Number,");
+    strcat(header, "Animal,");
     strcat(header, "Mode,");
     strcat(header, "Event,");
     strcat(header, "Active Sensor,");
@@ -425,22 +425,15 @@ void FED4::logEvent(Event e) {
     strcat(row, date);
     strcat(row, time);
     strcat(row, ",");
-
-    char battery_str[8];
-    pause_interrupts();
-    analogReadResolution(10);
-    float batteryVoltage = analogRead(FED4Pins::VBAT);
-    start_interrupts();
-    batteryVoltage *= 2;
-    batteryVoltage *= 3.3;
-    batteryVoltage /= 1024;
-    snprintf(battery_str, sizeof(battery_str), "%.2f", batteryVoltage);
-    strcat(row, battery_str);
-    strcat(row, ",");
     
     char deviceNumber_str[8];
     snprintf(deviceNumber_str, sizeof(deviceNumber_str), "%d", deviceNumber%100);
     strcat(row, deviceNumber_str);
+    strcat(row, ",");
+
+    char animal_str[8];
+    sniprintf(animal_str, sizeof(animal_str), "%d", animal);
+    strcat(row, animal_str);
     strcat(row, ",");
 
     char mode_str[10];
@@ -727,7 +720,7 @@ void FED4::runConfigMenu() {
     Menu configMenu = Menu();
 
     configMenu.add("Time", new ClockMenu());
-    configMenu.add("Dev no", &deviceNumber, 0, 99, 1);
+    configMenu.add("Animal", &animal, 0, 99, 1);
 
     const char* modes[] = {"FR", "VI", "%"};
     configMenu.add("Mode", &mode, modes, 3);
