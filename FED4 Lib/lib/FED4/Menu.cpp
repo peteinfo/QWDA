@@ -390,11 +390,15 @@ void printValue(MenuItem* item) {
     case ITEM_T_SUBMENU: {
         if(item->submenu->type == MENU_T_CLOCK) {
             DateTime now = menu_rtc->now();
+            if (now.hour() < 10) menu_display->print("0");
             menu_display->print(now.hour());
             menu_display->print(":");
+            if (now.minute() < 10) menu_display->print("0");
             menu_display->print(now.minute());
         }
-        menu_display->print(">");
+        else {
+            menu_display->print(">");
+        }
         break;
     }
     }
