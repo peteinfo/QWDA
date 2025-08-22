@@ -163,7 +163,7 @@ class FED4 {
     void rotateWheel(int degrees);
     
     void loadConfig();
-    void saveConfig();
+    bool saveConfig();
     
     bool getLeftPoke();
     bool getRightPoke(); 
@@ -171,11 +171,12 @@ class FED4 {
     
     void initSD();
     void showSdError();
-    void initLogFile();
+    void initLogFile(bool forceNewFile = false);
     void logEvent(Event e);
     void logError(String str);
+    void checkNewDayFile();
     
-    void updateDisplay(bool timeOnly = false);
+    void updateDisplay(bool statusOnly = false);
     void displayLayout();
     void print(String str, uint8_t size = 2);
     void drawDateTime();
@@ -228,6 +229,7 @@ class FED4 {
     int _reward;
     
     // Log Memory
+    DateTime _logfile_creation_date;
     size_t _log_buffer_pos = 0;
     char _log_buffer[FILE_RAM_BUFF_SIZE];
     unsigned long _last_flush = 0;
@@ -250,14 +252,17 @@ class FED4 {
     static void right_poke_IRS();
     static void well_ISR();
     static void alarm_ISR();
+
+    // ==== Log File ====
+    void get_latest_file(SdFile*);
+    void continue_logfile();
     
     // SD File CallBack
     static void dateTime(uint16_t* date, uint16_t* time);
     
-    
     // ==== Watch Dog ====
     WDTZero watch_dog;
-    uint32_t _wtd_timeout = WDT_SOFTCYCLE4M;
+    uint32_t _wtd_timeout = WDT_SOFTCYCLE1M;
     static void wtd_shut_down();
     void wtd_restart();
 };

@@ -97,15 +97,17 @@ void FED4::begin() {
         break;
     }
 
-    initLogFile();
+    bool modifiedConfig = saveConfig();
+    initLogFile(modifiedConfig);
     
-    saveConfig();
     displayLayout();
     
     watch_dog.setup(_wtd_timeout);
 }
 
 void FED4::run() {
+    checkNewDayFile();
+
     setLightCue();
 
     updateDisplay();    
@@ -237,9 +239,7 @@ void FED4::loadConfig() {
     configFile.close();
 }
 
-void FED4::saveConfig() {
-    sd.remove("CONFIG.json");
-    File configFile = sd.open("CONFIG.json", FILE_WRITE);
+bool FED4::saveConfig() {
     JsonDocument config;
 
     config["device number"] = deviceNumber;
@@ -288,8 +288,21 @@ void FED4::saveConfig() {
         config["reward"]["window"] = false;
     }
     
+    File oldConfigFile = sd.open("CONFIG.json", FILE_READ);
+    JsonDocument oldConfig;
+    deserializeJson(oldConfig, oldConfigFile);
+
+    bool modifiedConfig = false;
+    if (oldConfig != config) {
+        modifiedConfig = true;
+    }
+
+    sd.remove("CONFIG.json");
+    File configFile = sd.open("CONFIG.json", FILE_WRITE);
     serializeJson(config, configFile);
     configFile.close();
+
+    return modifiedConfig;
 }
 
 bool FED4::getLeftPoke() {
@@ -343,7 +356,35 @@ void FED4::showSdError() {
     delay(1000);
 }
 
-void FED4::initLogFile() {   
+void FED4::initLogFile(bool forceNewFile) {   
+    SdFile file;
+    get_latest_file(&file);
+
+    if (file.isFile() && !forceNewFile) {
+        uint16_t date, time;
+        file.getCreateDateTime(&date, &time);
+        uint16_t year = ((date >> 9) & 0x7f) + 1980;
+        uint8_t month = (date >> 5) & 0x0f;
+        uint8_t day = date & 0x1f;
+        DateTime now = getDateTime();
+        DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
+        DateTime createdDate(year, month, day, 0, 0, 0);
+
+        if (currentDate == createdDate) {
+            _logfile_creation_date = createdDate;
+            logFile = file;
+            continue_logfile();
+            Event e = {
+                time: getDateTime(),
+                message: EventMsg::RESET
+            };
+            logEvent(e);
+            flush_to_sd();
+
+            return;
+        }
+    }
+
     digitalWrite(FED4Pins::MTR_EN, LOW);
     char fileName[30] = "";
 
@@ -374,9 +415,14 @@ void FED4::initLogFile() {
         fileName[16] = '0' + fileIndex % 10;
     }
     
+    pause_interrupts();
+    if (logFile) {
+        logFile.close();
+    }
     logFile.open(fileName, FILE_WRITE);
     logFile.createContiguous(fileName, FILE_PREALLOC_SIZE);
     logFile.rewind();
+    start_interrupts();
 
     char header[500] = "";
     strcat(header, "TimeStamp,");
@@ -581,6 +627,20 @@ void FED4::logError(String str) {
         .message = (const char *)errorMsg
     };
     logEvent(event);
+}
+
+void FED4::checkNewDayFile() {
+    DateTime now = getDateTime();
+    DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
+
+    if (_logfile_creation_date < currentDate) {
+        flush_to_sd();
+        initLogFile();
+
+        leftPokeCount = 0;
+        rightPokeCount = 0;
+        pelletsDispensed = 0;
+    }
 }
 
 void FED4::updateDisplay(bool statusOnly) {
@@ -1247,6 +1307,8 @@ void FED4::alarm_handler() {
         if (checkFeedingWindow()) {
             _sleep_mode = false;
         }
+
+        checkNewDayFile();
         
         updateDisplay(true);
         setLightCue();
@@ -1305,22 +1367,8 @@ void FED4::alarm_ISR() {
     }
 }
 
-void FED4::dateTime(uint16_t *date, uint16_t *time) {
-    DateTime now = instance->getDateTime();
-    *date = FAT_DATE(now.year(), now.month(), now.day());
-    *time = FAT_TIME(now.hour(), now.minute(), now.second());
-}
-
-void FED4::wtd_shut_down() {
-    if(instance) {
-        // instance->flush_to_sd();
-    }
-}
-
-void  FED4::wtd_restart() {
+void FED4::get_latest_file(SdFile* file) {
     pause_interrupts();
-
-    watch_dog.setup(_wtd_timeout);
 
     FatFile root;
     root.open("/", O_READ);
@@ -1330,12 +1378,11 @@ void  FED4::wtd_restart() {
     uint16_t latestTime = 0;
     uint16_t latestDate = 0;
 
-    SdFile file;
-    while (file.openNext(&root, O_READ)) {
+    while (file->openNext(&root, O_READ)) {
         uint16_t date, time;
         char name[30] = "";
-        file.getModifyDateTime(&date, &time);
-        file.getName(name, 30);
+        file->getModifyDateTime(&date, &time);
+        file->getName(name, 30);
         if (
             ( date > latestDate 
             || (date == latestDate && time > latestTime) )
@@ -1345,20 +1392,21 @@ void  FED4::wtd_restart() {
             latestTime = time;
             strncpy(latestName, name, 30);
         }
-        file.close();
+        file->close();
     }
 
-    if (!logFile.open(latestName, O_RDWR | O_AT_END) || strlen(latestName) == 0) {
-        initLogFile();
-        Event event = {
-            time: getDateTime(),
-            message: EventMsg::WTD_RTS
-        };
-        logEvent(event);
-        flush_to_sd();
-        start_interrupts();
-        return;
+    if(strlen(latestName) == 0) {
+        file->close();
     }
+    if(!file->open(latestName, O_RDWR | O_AT_END)) {
+        file->close();
+    }
+
+    start_interrupts();
+}
+
+void FED4::continue_logfile() {
+    pause_interrupts();
 
     char header[500] = "";
 
@@ -1435,10 +1483,49 @@ void  FED4::wtd_restart() {
 
     logFile.seekEnd();
     logFile.print("\n");
+
+    start_interrupts();
     
     leftPokeCount = leftPokes;
     rightPokeCount = rightPokes;
     pelletsDispensed = pellets;
+}
+
+void FED4::dateTime(uint16_t *date, uint16_t *time) {
+    DateTime now = instance->getDateTime();
+    *date = FAT_DATE(now.year(), now.month(), now.day());
+    *time = FAT_TIME(now.hour(), now.minute(), now.second());
+}
+
+void FED4::wtd_shut_down() {
+    if(instance) {
+        // instance->flush_to_sd();
+    }
+}
+
+void  FED4::wtd_restart() {
+    pause_interrupts();
+
+    watch_dog.setup(_wtd_timeout);
+
+    SdFile file;
+    get_latest_file(&file);
+
+    if (!file.isFile()) {
+        initLogFile();
+        Event event = {
+            time: getDateTime(),
+            message: EventMsg::WTD_RTS
+        };
+        logEvent(event);
+        flush_to_sd();
+        start_interrupts();
+        return;
+    }
+
+    logFile = file;
+
+    continue_logfile();
 
     Event event = {
         time: getDateTime(),
