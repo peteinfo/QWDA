@@ -15,38 +15,55 @@ void HardFault_Handler(void) {
 void FED4::begin() {
     instance = this;
 
+    Serial.begin(115200);
+    delay(300);
+
+    stepper.setSpeed(7);
+
+    rtc.begin();
+    if (rtc.lostPower()) {
+        rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
+
+    strip = Adafruit_NeoPixel(10, FED4Pins::NEOPXL, NEO_GRBW + NEO_KHZ800);
+
+    display.begin();
+    display.clearDisplay();
+    display.setRotation(3);
+    display.refresh();
+
     // Motor pins
     pinMode(FED4Pins::MTR_EN, OUTPUT);
     pinMode(FED4Pins::MTR_1, OUTPUT);
     pinMode(FED4Pins::MTR_2, OUTPUT);
     pinMode(FED4Pins::MTR_3, OUTPUT);
     pinMode(FED4Pins::MTR_4, OUTPUT);
-    
+
     // Input pins
     pinMode(FED4Pins::LFT_POKE, INPUT_PULLUP);
     pinMode(FED4Pins::RGT_POKE, INPUT_PULLUP);
     pinMode(FED4Pins::WELL, INPUT);
     digitalWrite(FED4Pins::WELL, HIGH);
-    
+
     // Interrupts
     attachInterrupt(digitalPinToInterrupt(FED4Pins::LFT_POKE), left_poke_IRS, CHANGE);
     attachInterrupt(digitalPinToInterrupt(FED4Pins::RGT_POKE), right_poke_IRS, CHANGE);
     attachInterrupt(digitalPinToInterrupt(FED4Pins::WELL), well_ISR, CHANGE);
-    
+
     // Wakeup sources
     EIC->WAKEUP.reg |= (1 << 4);   // FED4Pins::LFT_POKE
     EIC->WAKEUP.reg |= (1 << 15);  // FED4Pins::RGT_POKE
     EIC->WAKEUP.reg |= (1 << 16);  // RTC peripheral
-    
+
     // Clock setup
     SYSCTRL->XOSC32K.reg |= (SYSCTRL_XOSC32K_RUNSTDBY | SYSCTRL_XOSC32K_ONDEMAND);
     GCLK->CLKCTRL.reg = GCLK_CLKCTRL_ID(GCM_EIC) |
     GCLK_CLKCTRL_CLKEN |
     GCLK_CLKCTRL_GEN_GCLK1;
     while (GCLK->STATUS.bit.SYNCBUSY);
-    
+
     SCB->SCR |= SCB_SCR_SLEEPDEEP_Msk; // Enable deep sleep mode
-    
+
     rtcZero.begin();
     rtcZero.setTime(rtc.now().hour(), rtc.now().minute(), rtc.now().second());
     rtcZero.setDate(rtc.now().day(), rtc.now().month(), rtc.now().year() - 2000);
@@ -70,19 +87,19 @@ void FED4::begin() {
     initSD();
     
     loadConfig();
-    
+
     if (PM->RCAUSE.reg & PM_RCAUSE_WDT) {
         wtd_restart();
         displayLayout();
         return;
     }
-    
+
     menu_display = &display;
     menu_rtc = &rtc;
-    runConfigMenu();
+    // runConfigMenu();
     switch (mode) {
     case Mode::FR:
-        runFRMenu();
+        // runFRMenu();
         break;
     case Mode::VI:
         runVIMenu();
@@ -99,13 +116,42 @@ void FED4::begin() {
 
     bool modifiedConfig = saveConfig();
     initLogFile(modifiedConfig);
-    
+
     displayLayout();
-    
+
     watch_dog.setup(_wtd_timeout);
 }
 
+void FED4::checkSerialCommand() {
+    if (Serial.available()) {
+        String command = Serial.readStringUntil('\n');
+        Serial.println("Recieved: " + command);
+
+        if (command.startsWith("ID")) {
+            char response[20];
+            sprintf(response, "FED %d", deviceNumber);
+            Serial.println(response);
+        }
+
+        if (command.startsWith("SETTIME")) {
+            int year, month, day, hour, minutes, seconds;
+            int parsed = sscanf(command.c_str(), "SETTIME %d-%d-%d %d:%d:%d",
+                &day, &month, &year, &hour, &minutes, &seconds);
+            if (parsed == 6) {
+                rtc.adjust(DateTime(year, month, day, hour, minutes, seconds));
+                Serial.println("Set time!");
+            }
+            else {
+                Serial.println("Invalid format. Use: SETTIME DD-MM-YYYY HH:MM:SS");
+            }
+        }
+    }
+}
+
+
 void FED4::run() {
+    checkSerialCommand();
+
     checkNewDayFile();
 
     setLightCue();
@@ -124,6 +170,7 @@ void FED4::run() {
 }
 
 void FED4::sleep() {
+    return;
     _sleep_mode = true;
     __DSB();
     while(_sleep_mode) {
@@ -375,8 +422,8 @@ void FED4::initLogFile(bool forceNewFile) {
             logFile = file;
             continue_logfile();
             Event e = {
-                time: getDateTime(),
-                message: EventMsg::RESET
+                .time = getDateTime(),
+                .message = EventMsg::RESET
             };
             logEvent(e);
             flush_to_sd();
@@ -1514,8 +1561,8 @@ void  FED4::wtd_restart() {
     if (!file.isFile()) {
         initLogFile();
         Event event = {
-            time: getDateTime(),
-            message: EventMsg::WTD_RTS
+            .time = getDateTime(),
+            .message = EventMsg::WTD_RTS
         };
         logEvent(event);
         flush_to_sd();
@@ -1528,8 +1575,8 @@ void  FED4::wtd_restart() {
     continue_logfile();
 
     Event event = {
-        time: getDateTime(),
-        message: EventMsg::WTD_RTS
+        .time = getDateTime(),
+        .message = EventMsg::WTD_RTS
     };
     logEvent(event);
     flush_to_sd();

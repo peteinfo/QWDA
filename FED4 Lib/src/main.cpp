@@ -1,14 +1,8 @@
 #include <FED4.h>
 
-FED4 fed4;
-long lastLogTime = 0;
-int init_freeMem = 0;
+auto fed4 = FED4();
 
 void setup() {
-    Serial.begin(9600);
-
-    fed4 = FED4();
-
     fed4.begin();
 }
 

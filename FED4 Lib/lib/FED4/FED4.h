@@ -3,10 +3,10 @@
 
 #include <Arduino.h>
 #include <functional>
-#include <string>
 
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_SharpMem.h>
+#include <Adafruit_TinyUSB.h>
 #include <ArduinoJson.h>
 #include <RTClib.h>
 #include <RTCZero.h>
@@ -61,7 +61,6 @@ namespace ActiveSensor {
     constexpr uint8_t RIGHT   = 1;
     constexpr uint8_t BOTH    = 2;
 };
- 
 
 namespace EventMsg {
     constexpr const char* LEFT     = "Left Poke";
@@ -89,28 +88,18 @@ class FED4 {
     static FED4* instance;  
     
     FED4() :
+        sd(),
         display(
-            FED4Pins::SHRP_SCK, FED4Pins::SHRP_MOSI, 
-            FED4Pins::SHRP_CS, DISPLAY_H, DISPLAY_W
-        ),
+             FED4Pins::SHRP_SCK, FED4Pins::SHRP_MOSI,
+             FED4Pins::SHRP_CS, DISPLAY_H, DISPLAY_W
+         ),
         stepper(
-            STEPS, FED4Pins::MTR_1, FED4Pins::MTR_2, 
-            FED4Pins::MTR_3, FED4Pins::MTR_4
-        ),
-        strip(10, FED4Pins::NEOPXL, NEO_GRBW + NEO_KHZ800) 
+                 STEPS, FED4Pins::MTR_1, FED4Pins::MTR_2,
+                 FED4Pins::MTR_3, FED4Pins::MTR_4
+             )
     {
-        watch_dog.attachShutdown(wtd_shut_down);
-
-        rtc.begin();
-        if (rtc.lostPower()) {
-            rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-        }
-        stepper.setSpeed(7);
-        
-        display.begin();
-        display.clearDisplay();
-        display.setRotation(3);
-        display.refresh();
+        // Serial.begin(115200);
+        // delay(300);
     }
 
 
@@ -122,8 +111,7 @@ class FED4 {
     Stepper stepper;
     Adafruit_NeoPixel strip;
 
-    
-    // ==== Pulbic Flags ====
+    // ==== Public Flags ====
     bool ignorePokes = false;
     
     
@@ -158,6 +146,8 @@ class FED4 {
     void begin();
     void run();
     void sleep();
+
+    void checkSerialCommand();
     
     void feed(int pellets = 1, bool wait = true);
     void rotateWheel(int degrees);
@@ -226,12 +216,12 @@ class FED4 {
     
     
     // ==== Internal State ====
-    int _reward;
-    
+    int _reward{};
+
     // Log Memory
     DateTime _logfile_creation_date;
     size_t _log_buffer_pos = 0;
-    char _log_buffer[FILE_RAM_BUFF_SIZE];
+    char _log_buffer[FILE_RAM_BUFF_SIZE]{};
     unsigned long _last_flush = 0;
     void write_to_log(char row[ROW_MAX_LEN], bool forceFlush=false);
     void flush_to_sd();
