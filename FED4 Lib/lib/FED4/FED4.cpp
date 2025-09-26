@@ -138,12 +138,25 @@ void FED4::feed(int pellets, bool wait) {
 
     long startOfFeed;
     for (int i = 0; i < pellets; i++) {
+        
+        strip.setPixelColor(0, 0, 0, 0, 0);
+        strip.setPixelColor(1, 0, 0, 0, 0);
+        strip.setPixelColor(2, 0, 0, 0, 0);
+        strip.setPixelColor(3, 0, 0, 0, 0);
+        strip.setPixelColor(4, 0, 0, 0, 0);
+        strip.setPixelColor(5, 0, 0, 0, 0);
+        strip.setPixelColor(6, 0, 0, 0, 0);
+        strip.setPixelColor(7, 0, 0, 0, 0);
+        strip.show();
+
         startOfFeed = millis();
 #if OLD_WELL
         while(_pellet_in_well == false)
 #else
         while (getWellStatus() == false)
 #endif
+
+
         {
             long deltaT = millis() - startOfFeed;
             if (deltaT < 15000)
