@@ -106,7 +106,7 @@ void FED4::begin() {
 }
 
 void FED4::run() {
-    checkNewDayFile();
+    checkCreateNewFile();
 
     setLightCue();
 
@@ -358,32 +358,34 @@ void FED4::showSdError() {
 
 void FED4::initLogFile(bool forceNewFile) {   
     SdFile file;
-    get_latest_file(&file);
+    // get_latest_file(&file);
 
-    if (file.isFile() && !forceNewFile) {
-        uint16_t date, time;
-        file.getCreateDateTime(&date, &time);
-        uint16_t year = ((date >> 9) & 0x7f) + 1980;
-        uint8_t month = (date >> 5) & 0x0f;
-        uint8_t day = date & 0x1f;
-        DateTime now = getDateTime();
-        DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
-        DateTime createdDate(year, month, day, 0, 0, 0);
+    _logfile_creation_time = rtc.now();
 
-        if (currentDate == createdDate) {
-            _logfile_creation_date = createdDate;
-            logFile = file;
-            continue_logfile();
-            Event e = {
-                time: getDateTime(),
-                message: EventMsg::RESET
-            };
-            logEvent(e);
-            flush_to_sd();
+    // if (file.isFile() && !forceNewFile) {
+    //     uint16_t date, time;
+    //     file.getCreateDateTime(&date, &time);
+    //     uint16_t year = ((date >> 9) & 0x7f) + 1980;
+    //     uint8_t month = (date >> 5) & 0x0f;
+    //     uint8_t day = date & 0x1f;
+    //     DateTime now = getDateTime();
+    //     DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
+    //     DateTime createdDate(year, month, day, 0, 0, 0);
 
-            return;
-        }
-    }
+    //     if (currentDate == createdDate) {
+    //         _logfile_creation_time = createdDate;
+    //         logFile = file;
+    //         continue_logfile();
+    //         Event e = {
+    //             time: getDateTime(),
+    //             message: EventMsg::RESET
+    //         };
+    //         logEvent(e);
+    //         flush_to_sd();
+
+    //         return;
+    //     }
+    // }
 
     digitalWrite(FED4Pins::MTR_EN, LOW);
     char fileName[30] = "";
@@ -629,17 +631,39 @@ void FED4::logError(String str) {
     logEvent(event);
 }
 
-void FED4::checkNewDayFile() {
+void FED4::checkCreateNewFile() {
     DateTime now = getDateTime();
-    DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
+    DateTime newFileTime;
 
-    if (_logfile_creation_date < currentDate) {
+    if (feedWindow) {
+        if (!checkFeedingWindow()) {
+            return;
+        }
+
+        DateTime currentWindowStart = DateTime(now.year(), now.month(), now.day(), windowStart, 0, 0);
+        if (now.hour() < windowStart) {
+            currentWindowStart = currentWindowStart - TimeSpan(1, 0, 0, 0);
+        }
+
+        newFileTime = currentWindowStart;
+    } 
+    else {
+        DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
+        newFileTime = currentDate;
+    }
+    
+    if (_logfile_creation_time < newFileTime) {
         flush_to_sd();
-        initLogFile();
+        initLogFile(true);
 
         leftPokeCount = 0;
         rightPokeCount = 0;
         pelletsDispensed = 0;
+
+        pause_interrupts();
+        displayLayout();
+        updateDisplay();
+        start_interrupts();
     }
 }
 
@@ -1056,6 +1080,13 @@ void FED4::setLightCue() {
         }
 
         strip.setPixelColor(0, 0, 0, 0, 0);
+        strip.setPixelColor(1, 0, 0, 0, 0);
+        strip.setPixelColor(2, 0, 0, 0, 0);
+        strip.setPixelColor(3, 0, 0, 0, 0);
+        strip.setPixelColor(4, 0, 0, 0, 0);
+        strip.setPixelColor(5, 0, 0, 0, 0);
+        strip.setPixelColor(6, 0, 0, 0, 0);
+        strip.setPixelColor(7, 0, 0, 0, 0);
 
         strip.show();
     } else {
@@ -1308,7 +1339,7 @@ void FED4::alarm_handler() {
             _sleep_mode = false;
         }
 
-        checkNewDayFile();
+        checkCreateNewFile();
         
         updateDisplay(true);
         setLightCue();

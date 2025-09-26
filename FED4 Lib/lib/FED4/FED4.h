@@ -174,7 +174,7 @@ class FED4 {
     void initLogFile(bool forceNewFile = false);
     void logEvent(Event e);
     void logError(String str);
-    void checkNewDayFile();
+    void checkCreateNewFile();
     
     void updateDisplay(bool statusOnly = false);
     void displayLayout();
@@ -229,7 +229,7 @@ class FED4 {
     int _reward;
     
     // Log Memory
-    DateTime _logfile_creation_date;
+    DateTime _logfile_creation_time;
     size_t _log_buffer_pos = 0;
     char _log_buffer[FILE_RAM_BUFF_SIZE];
     unsigned long _last_flush = 0;
