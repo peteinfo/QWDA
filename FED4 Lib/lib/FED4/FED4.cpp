@@ -144,6 +144,17 @@ void FED4::feed(int pellets, bool wait) {
 #else
         while (getWellStatus() == false)
 #endif
+
+        strip.setPixelColor(0, 0, 0, 0, 0);
+        strip.setPixelColor(1, 0, 0, 0, 0);
+        strip.setPixelColor(2, 0, 0, 0, 0);
+        strip.setPixelColor(3, 0, 0, 0, 0);
+        strip.setPixelColor(4, 0, 0, 0, 0);
+        strip.setPixelColor(5, 0, 0, 0, 0);
+        strip.setPixelColor(6, 0, 0, 0, 0);
+        strip.setPixelColor(7, 0, 0, 0, 0);
+        strip.show();
+
         {
             long deltaT = millis() - startOfFeed;
             if (deltaT < 15000)
