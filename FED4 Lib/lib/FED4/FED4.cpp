@@ -88,8 +88,8 @@ void FED4::begin() {
         case Mode::CHANCE:
         runChanceMenu();
         break;
-        case Mode::VI_PROB:
-        runProbViMenu();
+        case Mode::FR_PROB:
+        runProbFRMenu();
         break;
         case Mode::OTHER:
         runOtherModeMenu();
@@ -232,8 +232,8 @@ void FED4::loadConfig() {
     } else if (config["mode"]["name"] == "CHANCE") {
         mode = Mode::CHANCE;
         chance = config["mode"]["chance"];
-    } else if (config["mode"]["name"] == "VI%") {
-        mode = Mode::VI_PROB;
+    } else if (config["mode"]["name"] == "FR%") {
+        mode = Mode::FR_PROB;
         ratio = config["mode"]["ratio"];
         chance = config["mode"]["chance"];
     }
@@ -282,8 +282,8 @@ bool FED4::saveConfig() {
         config["mode"]["chance"] = chance;
         break;
 
-    case Mode::VI_PROB:
-        config["mode"]["name"] = "VI%";
+    case Mode::FR_PROB:
+        config["mode"]["name"] = "FR%";
         config["mode"]["ratio"] = ratio;
         config["mode"]["chance"] = chance;
 
@@ -482,7 +482,7 @@ void FED4::initLogFile(bool forceNewFile) {
         strcat(header, ",Chance");
         break;
 
-    case Mode::VI_PROB:
+    case Mode::FR_PROB:
         strcat(header, ",Ratio");
         strcat(header, ",Chance");
         break;
@@ -535,8 +535,8 @@ void FED4::logEvent(Event e) {
         sprintf(mode_str, "CHANCE");
         break;
 
-    case Mode::VI_PROB:
-        sprintf(mode_str, "VI%");
+    case Mode::FR_PROB:
+        sprintf(mode_str, "PROB FR");
         break;
 
     default :
@@ -650,7 +650,7 @@ void FED4::logEvent(Event e) {
         break;
     }
 
-    case Mode::VI_PROB:{
+    case Mode::FR_PROB:{
         char ratio_str[10];
         sprintf(ratio_str, "%d", ratio);
         strcat(row, ",");
@@ -771,8 +771,8 @@ void FED4::displayLayout() {
     case Mode::CHANCE:
         display.print("Chance");
         break;
-    case Mode::VI_PROB:
-        display.print("Probabilistic VI");
+    case Mode::FR_PROB:
+        display.print("Probabilistic FR");
         break;
     default:
         break;
@@ -897,7 +897,7 @@ void FED4::runConfigMenu() {
     configMenu.add("Time", new ClockMenu());
     configMenu.add("Animal", &animal, 0, 99, 1);
 
-    const char* modes[] = {"FR", "VI", "%", "VI%"};
+    const char* modes[] = {"FR", "VI", "%", "FR%"};
     configMenu.add("Mode", &mode, modes, 4);
 
     const char* sensors[] = {"L", "R", "L&R"};
@@ -947,13 +947,13 @@ void FED4::runChanceMenu() {
     ignorePokes = false;
 }
 
-void FED4::runProbViMenu() {
+void FED4::runProbFRMenu() {
     ignorePokes = true;
 
-    Menu probVIMenu = Menu();
-    probVIMenu.add("Ratio", &ratio, 1, 10, 1);
-    probVIMenu.add("Chance", &chance, 0.0, 1.0, 0.05);
-    probVIMenu.run();
+    Menu probFRMenu = Menu();
+    probFRMenu.add("Ratio", &ratio, 1, 10, 1);
+    probFRMenu.add("Chance", &chance, 0.0, 1.0, 0.05);
+    probFRMenu.run();
 
     ignorePokes = false;
 }
@@ -977,7 +977,7 @@ bool FED4::checkCondition() {
         conditionMet = checkChanceCondition();
         break;
 
-    case Mode::VI_PROB: {
+    case Mode::FR_PROB: {
         bool pokedLeft = getLeftPoke();
         bool pokedRight = getRightPoke();
 
