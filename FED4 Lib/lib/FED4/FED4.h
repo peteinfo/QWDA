@@ -172,10 +172,11 @@ class FED4 {
     
     void initSD();
     void showSdError();
-    void initLogFile(bool forceNewFile = false);
+    void initLogFile(const char* suffix = "");
     void logEvent(Event e);
     void logError(String str);
     void checkCreateNewFile();
+    void createNewFile(const char* suffix = "");
     
     void updateDisplay(bool statusOnly = false);
     void displayLayout();
@@ -199,7 +200,7 @@ class FED4 {
     bool checkChanceCondition();
     std::function<bool()> checkOtherCondition = nullptr;
     
-    bool checkFeedingWindow();
+    bool checkFeedingWindow(bool createFile = true);
     void setLightCue();
 
     int getViCountDown();
@@ -229,6 +230,7 @@ class FED4 {
     
     // ==== Internal State ====
     int _reward;
+    bool _in_window;
     
     // Log Memory
     DateTime _logfile_creation_time;

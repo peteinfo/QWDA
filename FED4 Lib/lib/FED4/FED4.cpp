@@ -99,7 +99,13 @@ void FED4::begin() {
     }
     
     bool modifiedConfig = saveConfig();
-    initLogFile(modifiedConfig);
+    _in_window = checkFeedingWindow(false);
+    if (_in_window) {
+        initLogFile("_aw");
+    }
+    else {
+        initLogFile();
+    }
     
     randomSeed(micros());
 
@@ -382,39 +388,13 @@ void FED4::showSdError() {
     delay(1000);
 }
 
-void FED4::initLogFile(bool forceNewFile) {   
+void FED4::initLogFile(const char* suffix) {   
     SdFile file;
-    // get_latest_file(&file);
 
     _logfile_creation_time = rtc.now();
 
-    // if (file.isFile() && !forceNewFile) {
-    //     uint16_t date, time;
-    //     file.getCreateDateTime(&date, &time);
-    //     uint16_t year = ((date >> 9) & 0x7f) + 1980;
-    //     uint8_t month = (date >> 5) & 0x0f;
-    //     uint8_t day = date & 0x1f;
-    //     DateTime now = getDateTime();
-    //     DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
-    //     DateTime createdDate(year, month, day, 0, 0, 0);
-
-    //     if (currentDate == createdDate) {
-    //         _logfile_creation_time = createdDate;
-    //         logFile = file;
-    //         continue_logfile();
-    //         Event e = {
-    //             time: getDateTime(),
-    //             message: EventMsg::RESET
-    //         };
-    //         logEvent(e);
-    //         flush_to_sd();
-
-    //         return;
-    //     }
-    // }
-
     digitalWrite(FED4Pins::MTR_EN, LOW);
-    char fileName[30] = "";
+    char fileName[40] = "";
 
     DateTime now = getDateTime();
     
@@ -431,7 +411,9 @@ void FED4::initLogFile(bool forceNewFile) {
     if (now.year() % 100 < 10) strcat(fileName, "0");
     strcat(fileName, String(now.year() % 100).c_str());
     strcat(fileName, "_");
-    strcat(fileName, "01.csv");
+    strcat(fileName, "01");
+    strcat(fileName, suffix);
+    strcat(fileName, ".csv");
     
     // fed1_06-03-25_01.csv
     
@@ -682,39 +664,30 @@ void FED4::logError(String str) {
 }
 
 void FED4::checkCreateNewFile() {
-    DateTime now = getDateTime();
-    DateTime newFileTime;
-
     if (feedWindow) {
-        if (!checkFeedingWindow()) {
-            return;
-        }
-
-        DateTime currentWindowStart = DateTime(now.year(), now.month(), now.day(), windowStart, 0, 0);
-        if (now.hour() < windowStart) {
-            currentWindowStart = currentWindowStart - TimeSpan(1, 0, 0, 0);
-        }
-
-        newFileTime = currentWindowStart;
+        return;
     } 
-    else {
-        DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
-        newFileTime = currentDate;
-    }
+
+    DateTime now = getDateTime();
+    DateTime currentDate(now.year(), now.month(), now.day(), 0, 0, 0);
     
-    if (_logfile_creation_time < newFileTime) {
-        flush_to_sd();
-        initLogFile(true);
-
-        leftPokeCount = 0;
-        rightPokeCount = 0;
-        pelletsDispensed = 0;
-
-        pause_interrupts();
-        displayLayout();
-        updateDisplay();
-        start_interrupts();
+    if (_logfile_creation_time < currentDate) {
+        createNewFile();
     }
+}
+
+void FED4::createNewFile(const char* suffix) {
+    flush_to_sd();
+    initLogFile(suffix);
+
+    leftPokeCount = 0;
+    rightPokeCount = 0;
+    pelletsDispensed = 0;
+
+    pause_interrupts();
+    displayLayout();
+    updateDisplay();
+    start_interrupts();
 }
 
 void FED4::updateDisplay(bool statusOnly) {
@@ -1119,7 +1092,7 @@ bool FED4::checkChanceCondition() {
     return false;
 }
 
-bool FED4::checkFeedingWindow() {
+bool FED4::checkFeedingWindow(bool createFile) {
     if (!feedWindow) return false;
     
     DateTime now = getDateTime();
@@ -1129,6 +1102,10 @@ bool FED4::checkFeedingWindow() {
         && now.hour() >= windowStart
         && now.hour() < windowEnd
     ) {
+        if (!_in_window && createFile) {
+            _in_window = true;
+            createNewFile("_aw");
+        }
         return true;
     }
 
@@ -1139,9 +1116,17 @@ bool FED4::checkFeedingWindow() {
             || now.hour() < windowEnd
         )
     ) {
+        if (!_in_window && createFile) {
+            _in_window = true; 
+            createNewFile("_aw");
+        }
         return true;
     }
 
+    if (_in_window && createFile) {
+        _in_window = false;
+        createNewFile();
+    }
     return false;
 }
 
