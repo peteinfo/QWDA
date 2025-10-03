@@ -979,6 +979,7 @@ bool FED4::checkCondition() {
 
 bool FED4::checkFRCondition() {
     bool conditionMet = false;
+    if (leftPokeCount == 0 || rightPokeCount == 0 ) return false;
     switch (activeSensor) {
     case ActiveSensor::BOTH:
         if ( (leftPokeCount + rightPokeCount) % ratio == 0 ) {
@@ -1140,14 +1141,17 @@ void FED4::setLightCue() {
         switch (activeSensor) {
         case ActiveSensor::BOTH:
             strip.setPixelColor(8, 5, 2, 0, 0);
+            strip.setPixelColor(9, 5, 2, 0, 0);
             break;
         
         case ActiveSensor::LEFT:
             strip.setPixelColor(9, 5, 2, 0, 0);
+            strip.setPixelColor(8, 0, 0, 0, 0);
             break;
 
         case ActiveSensor::RIGHT:
             strip.setPixelColor(8, 5, 2, 0, 0);
+            strip.setPixelColor(9, 0, 0, 0, 0);
             break;
         }
 
