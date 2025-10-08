@@ -979,7 +979,7 @@ bool FED4::checkCondition() {
 
 bool FED4::checkFRCondition() {
     bool conditionMet = false;
-    if (leftPokeCount == 0 || rightPokeCount == 0 ) return false;
+    if (leftPokeCount == 0 && rightPokeCount == 0 ) return false;
     switch (activeSensor) {
     case ActiveSensor::BOTH:
         if ( (leftPokeCount + rightPokeCount) % ratio == 0 ) {
